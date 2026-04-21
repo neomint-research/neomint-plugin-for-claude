@@ -1,0 +1,54 @@
+name: plugin-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  layer-1-and-2:
+    name: Layer 1 structural + Layer 2 graders
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Governance model: Layer 1 is the structural foundation. If Layer 1
+      # fails, Layer 2 grader output on top of broken structure is noise,
+      # so we fail-fast rather than report mixed signals. A missing per-
+      # skill grader is not a failure — it's an optional mechanism — so
+      # each grader step is conditional on its script existing on disk.
+
+      - name: Layer 1 — plugin-check
+        run: |
+          python3 skills/neomint-plugin-entwicklung/scripts/plugin-check.py
+
+      - name: Layer 2 — council grader
+        run: |
+          if [ -f skills/council/scripts/grade.py ]; then
+            python3 skills/council/scripts/grade.py
+          else
+            echo "no council grader — skipping"
+          fi
+
+      - name: Layer 2 — pdf-umbenennen grader
+        run: |
+          if [ -f skills/pdf-umbenennen/scripts/grade.py ]; then
+            python3 skills/pdf-umbenennen/scripts/grade.py
+          else
+            echo "no pdf-umbenennen grader — skipping"
+          fi
+
+      - name: Layer 2 — neomint-plugin-entwicklung grader
+        run: |
+          if [ -f skills/neomint-plugin-entwicklung/scripts/grade.py ]; then
+            python3 skills/neomint-plugin-entwicklung/scripts/grade.py
+          else
+            echo "no neomint-plugin-entwicklung grader — skipping"
+          fi

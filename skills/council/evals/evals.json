@@ -1,0 +1,41 @@
+{
+  "skill_name": "council",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "full-code-auth-extraction",
+      "mode_expected": "FULL",
+      "context_expected": "CODE",
+      "prompt": "We're thinking about pulling our auth library out of the monolith into a separate HTTP service. Should we do it this quarter, next quarter, or not now? I have a small example repo at /sessions/clever-kind-mayer/council-workspace/fixtures/mock-monolith that shows our current structure — six services, all importing from lib/auth. There was a 3-hour outage last quarter when we changed the token format and notifications had been pinned to the older shared version. Admin impersonation also still issues full-scope tokens. What does the Council say?",
+      "files": ["/sessions/clever-kind-mayer/council-workspace/fixtures/mock-monolith"],
+      "expected_output": "Council verdict with all 5 roles, Cartographer's dependency map BEFORE Adversary/Scout/Operator findings, MECE check, two-track output (operative + management), stopping criterion. Mode announced as FULL, context as CODE. Should propose writing COUNCIL.md."
+    },
+    {
+      "id": 1,
+      "eval_name": "quick-chat-slo-breaker",
+      "mode_expected": "QUICK",
+      "context_expected": "CHAT",
+      "prompt": "I claim: if our p95 latency has been stable at 340ms for 6 months and our SLO is 300ms, we absolutely need to introduce a circuit breaker. Is that correct?",
+      "files": [],
+      "expected_output": "Council verdict in QUICK mode, CHAT context. All 5 roles visible, MECE check, two-track output. Analyst should notice that a circuit breaker isn't the tool for chronic SLO violation (circuit breakers address downstream failure isolation, not latency reduction). Verdict should be: no, the premise doesn't entail the conclusion."
+    },
+    {
+      "id": 2,
+      "eval_name": "audit-doc-policy-gaps",
+      "mode_expected": "AUDIT",
+      "context_expected": "DOC",
+      "prompt": "Here's our draft data protection policy for client onboarding (see file). What's missing? What are the gaps before this can go in front of legal?",
+      "files": ["/sessions/clever-kind-mayer/council-workspace/fixtures/draft-policy.md"],
+      "expected_output": "AUDIT mode, DOC context. Should surface at least 3 of these gaps: missing retention period, missing breach notification / incident response, engineering access scope is too broad, missing lawful basis (GDPR Art. 6), no withdrawal mechanism for consent, vague 'reasonable timeframe' vs GDPR 30-day rule, no DPO / controller named, no cross-border transfer clause, no DPA reference for processors (Stripe/AWS/Zendesk), no data-minimisation clause, no access-logging commitment for sensitive data. Two-track output with one first step."
+    },
+    {
+      "id": 3,
+      "eval_name": "ambiguity-diagnostic-question",
+      "mode_expected": "DIAGNOSTIC",
+      "context_expected": "CHAT",
+      "prompt": "Kannst du mal drüberschauen?",
+      "files": [],
+      "expected_output": "The Council should NOT just run with a random assumption. It should ask EXACTLY ONE diagnostic question that (a) names the missing dimension, (b) offers two concrete interpretations to choose between, (c) states which default assumption would otherwise apply. Not multiple questions, not a refusal. This tests the input-logic edge case."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Node (shouldn't appear, but defensively)
+node_modules/
+
+# Build / cache artefacts that must never live inside the plugin tree
+.mcpb-cache/
+evals/reports/
+evals/cache/
+
+# Shipping artefact — the canonical *.plugin file lives at the root
+# and IS committed so users can install directly from a checkout.
+# Transient build zips elsewhere should not be committed.
+/tmp/
+/pluginbuild/
