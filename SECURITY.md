@@ -6,7 +6,7 @@ Security fixes are applied to the most recent published version of the toolkit. 
 
 ## Reporting a vulnerability
 
-Please report security issues privately to **security@neomint.com** rather than opening a public issue.
+Please report security issues privately to **info@neomint.com** rather than opening a public issue. (We do not maintain a dedicated security alias; the general mailbox is monitored and security reports are triaged from there.)
 
 Include:
 

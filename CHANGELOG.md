@@ -10,6 +10,18 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.4.7 — 2026-04-21
+
+- `SECURITY.md`: security-report contact changed from the placeholder
+  `security@neomint.com` to `info@neomint.com`. A short explanatory
+  sentence was added so readers understand the general mailbox is the
+  monitored destination and that no dedicated security alias exists.
+  No other behaviour changes; per the governance skill's Step 2
+  exception, this is a pure metadata change and does not require the
+  `skill-creator` workflow.
+
+---
+
 ## 0.4.6 — 2026-04-21
 
 - Repository-publication layer added so the plugin can ship as the public
