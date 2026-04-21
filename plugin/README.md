@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.4.9` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.5.0` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -26,7 +26,7 @@ Context-aware judgment skill with five MECE roles (Analyst, Cartographer, Advers
 
 It runs as a **turn-gated live deliberation**: one phase per assistant message (T1 Orient · T2 **Ground** (Hersteller + Community, before any role speaks) · T3 Cartographer · T4 Analyst · T5 Adversary · T6 Scout · T7 Operator · T8 Verdict in FULL mode; three-turn compressed form in QUICK mode). Each turn ends in a visible sentinel so you can follow along, rebut a specific role, deepen any point, branch to a new premise, or abort cleanly — without restarting. The verdict produces a two-track output: an operative track with references and a management track with one recommendation. Every role turn from T4 onward must cite a prior role turn by direct quote, and the Chairman's verdict must cite each role — so you can see who heard whom. Follow-up runs are cheaper because `COUNCIL.md` persistence remembers prior framing.
 
-Triggers include decision language ("should we", "is this a good idea"), validation language ("check my reasoning", "poke holes"), risk language ("what could go wrong", "blind spots"), and completeness language ("what's missing", "audit").
+**Primary entry is `/council`.** In Claude Code and Cowork the Council is invoked explicitly by typing `/council` — not by auto-matching on decision language. The slash-command file at [`commands/council.md`](commands/council.md) carries the full turn-gated contract inline; a standard run completes without reading any reference file. The skill's own [`skills/council/SKILL.md`](skills/council/SKILL.md) is the fallback for Claude AI (Web), where slash commands are unavailable — its `disable-model-invocation: true` frontmatter blocks auto-triggering so the user remains in charge of when the Council fires. Detailed references (`roles.md`, `ground.md`, `persistence.md`, `turns.md`, `phases.md`) are loaded **on demand only**, keeping the per-run token floor roughly 80 % below the 0.4.x shape.
 
 ### `pdf-umbenennen`
 
@@ -51,6 +51,8 @@ neomint-toolkit/
 ├── CHANGELOG.md             ← version history, newest entry on top
 ├── README.md                ← this file; user documentation + plugin standards
 ├── SKILL_TEMPLATE.md        ← template for new skills
+├── commands/                ← optional, slash-command entry points
+│   └── <command>.md         ← one .md per command, carries full contract
 └── skills/
     ├── _shared/
     │   ├── environments.md  ← environment logic (single source of truth)
@@ -60,7 +62,19 @@ neomint-toolkit/
         └── references/      ← optional, for progressive disclosure
 ```
 
-Any deviation from this structure is a deficiency and must be corrected.
+Any deviation from this structure is a deficiency and must be corrected. The
+`commands/` directory is optional and only relevant for **explicit-invocation
+skills** — skills the user is expected to fire by name rather than have Claude
+auto-trigger on context. For such a skill the contract is bidirectional:
+`commands/<name>.md` carries the full contract inline (so a standard run loads
+no reference files), and its paired `skills/<name>/SKILL.md` must set
+`disable-model-invocation: true` in its frontmatter to prevent auto-triggering
+and also serves as the Claude AI (Web) fallback where slash commands are
+unavailable. Auto-triggering skills (e.g. `pdf-umbenennen`, `neomint-plugin-entwicklung`)
+have no command file and no `disable-model-invocation` flag — that is correct and
+intentional, not a deficiency. Layer 1 enforces the pairing: any `commands/X.md`
+without a matching `disable-model-invocation` skill, and any skill with that flag
+without a matching `commands/<name>.md`, is a violation.
 
 ### Required blocks in every SKILL.md
 

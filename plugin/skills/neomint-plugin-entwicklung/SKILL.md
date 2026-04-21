@@ -8,6 +8,10 @@ description: >
   describes a new capability for the plugin. Ensures all changes follow plugin standards,
   the official skill-creator skill is used, and the plugin is repackaged after every
   change. Proposes improvements to plugin standards or itself after every change.
+  Do NOT trigger for: general coding or scripting tasks, work inside unrelated plugins,
+  using the plugin's other skills to get work done (as opposed to editing them), or
+  user questions about how a skill behaves at runtime — this skill is strictly for
+  authoring and maintaining this plugin, not for operating it.
 ---
 
 # NeoMINT Plugin Development
@@ -368,15 +372,39 @@ neomint-toolkit/
 ├── CHANGELOG.md             ← version history, newest entry on top
 ├── README.md                ← user documentation + plugin standards
 ├── SKILL_TEMPLATE.md        ← template for new skills
+├── commands/                ← optional, slash-command entry points (one .md per command)
+│   └── <command>.md         ← carries full contract for its command (self-sufficient)
 └── skills/
     ├── _shared/
     │   ├── environments.md  ← environment logic (single source of truth)
     │   └── language.md      ← output language rules (single source of truth)
     └── <skill-name>/
-        └── SKILL.md
+        ├── SKILL.md
+        └── references/      ← optional, for progressive disclosure
 ```
 
 Any deviation from this structure is a deficiency and must be corrected.
+
+The `commands/` directory is optional and relevant only for **explicit-invocation
+skills** — skills the user is expected to fire by name rather than have Claude
+auto-trigger on context. For such a skill the pairing is mandatory and bidirectional:
+
+- `commands/<name>.md` is the primary entry in Claude Code and Cowork. It must
+  carry the full contract inline so a standard run loads no reference files.
+- `skills/<name>/SKILL.md` must set `disable-model-invocation: true` in its
+  frontmatter (to prevent auto-triggering) and serves as the Claude AI (Web)
+  fallback where slash commands are unavailable.
+
+Auto-triggering skills (the default — e.g. `pdf-umbenennen`,
+`neomint-plugin-entwicklung`) have no command file and no `disable-model-invocation`
+flag; that is correct, not a deficiency. When deciding whether a new skill is
+auto-triggering or explicit-invocation, ask: "would firing this without asking
+surprise the user?" If yes, it is explicit-invocation and needs the pairing.
+
+Layer 1 enforces the pairing in both directions — see
+`scripts/plugin-check.py`.
+
+This pattern was introduced in 0.5.0 for the `council` skill.
 
 ## Additional references
 

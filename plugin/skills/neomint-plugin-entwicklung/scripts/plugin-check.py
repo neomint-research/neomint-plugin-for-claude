@@ -33,6 +33,7 @@ from typing import Callable
 ROOT_WHITELIST = {
     ".claude-plugin",
     "skills",
+    "commands",
     "README.md",
     "CHANGELOG.md",
     "SKILL_TEMPLATE.md",
@@ -433,10 +434,19 @@ def run_layer1(root: Path, rep: Report) -> None:
             "claude-plugins-official",
             "claude-code",
         }
+        # YAML frontmatter field names legitimately quoted in README as
+        # part of the plugin standard — they are not skills and must not
+        # be flagged as ghosts. Add new field names here as they appear.
+        KNOWN_FRONTMATTER_FIELDS = {
+            "disable-model-invocation",
+            "argument-hint",
+            "allowed-tools",
+        }
         ghosts = [m for m in suspicious if m and m not in skill_names and m not in {
             "neomint-toolkit", "plugin.json", "SKILL.md", "README.md", "CHANGELOG.md",
             "SKILL_TEMPLATE.md", "language.md", "environments.md",
         } and m not in KNOWN_EXTERNAL
+        and m not in KNOWN_FRONTMATTER_FIELDS
         and not m.endswith(".md") and not m.endswith(".json") and not m.endswith(".plugin")
         and m not in {"major", "minor", "fix"}]
         # filter out anything that looks like a path component or file
@@ -445,6 +455,65 @@ def run_layer1(root: Path, rep: Report) -> None:
         ghosts = [g for g in ghosts if g.startswith(tuple("abcdefghijklmnopqrstuvwxyz")) and len(g) > 3]
         rep.add("README has no ghost-skill references", 1, not ghosts,
                 ("ghosts: " + ", ".join(ghosts)) if ghosts else "clean")
+
+    # --- commands/ ↔ skills/ pairing (explicit-invocation contract) ---
+    # Introduced in 0.5.0 with the council slash-command refactor.
+    # The standard (README, governance SKILL.md) says: the `commands/` directory
+    # is relevant ONLY for explicit-invocation skills, and the pairing is
+    # bidirectional:
+    #
+    #   commands/<name>.md  ⇔  skills/<name>/SKILL.md with disable-model-invocation: true
+    #
+    # This assertion catches both halves of the contract going silently out of
+    # sync — e.g. a command added without its skill being marked non-auto
+    # (so the skill would still auto-fire and race the command), or a skill
+    # marked non-auto without its command (so the skill is unreachable in
+    # Claude Code / Cowork). The Layer 3 audit on 0.5.0 surfaced the gap; this
+    # assertion promotes it into a Layer 1 assertion so the standard is
+    # enforced going forward, not just for council.
+    commands_dir = root / "commands"
+    commands: dict[str, Path] = {}
+    if commands_dir.exists() and commands_dir.is_dir():
+        for cmd_file in commands_dir.iterdir():
+            if cmd_file.is_file() and cmd_file.suffix == ".md":
+                commands[cmd_file.stem] = cmd_file
+
+    # Collect skills with disable-model-invocation: true
+    non_auto_skills: set[str] = set()
+    for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir() and p.name != "_shared"):
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        fm = _yaml_frontmatter(skill_md)
+        if fm and fm.get("disable-model-invocation", "").strip().lower() == "true":
+            non_auto_skills.add(skill_dir.name)
+
+    # Forward direction: every commands/<name>.md needs a paired non-auto skill
+    for cmd_name, cmd_path in sorted(commands.items()):
+        paired_skill_md = skills_dir / cmd_name / "SKILL.md"
+        paired_exists = paired_skill_md.exists()
+        paired_non_auto = cmd_name in non_auto_skills
+        ok = paired_exists and paired_non_auto
+        if not paired_exists:
+            detail = f"missing skills/{cmd_name}/SKILL.md"
+        elif not paired_non_auto:
+            detail = f"skills/{cmd_name}/SKILL.md missing disable-model-invocation: true"
+        else:
+            detail = "paired"
+        rep.add(
+            f"commands/{cmd_name}.md pairs with a non-auto skill",
+            1, ok, detail,
+        )
+
+    # Reverse direction: every non-auto skill needs a paired command file
+    for skill_name in sorted(non_auto_skills):
+        has_cmd = skill_name in commands
+        rep.add(
+            f"[{skill_name}] disable-model-invocation skill has a paired command",
+            1, has_cmd,
+            "paired" if has_cmd
+            else f"missing commands/{skill_name}.md — skill would be unreachable in Claude Code / Cowork",
+        )
 
 
 # -----------------------------------------------------------------------------

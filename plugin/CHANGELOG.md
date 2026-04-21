@@ -10,6 +10,113 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.5.0 — 2026-04-21
+
+- `council` skill: progressive-disclosure refactor and slash-command
+  conversion. Before this change, the Council auto-triggered on any
+  decision-language signal and loaded the full `SKILL.md` body (721
+  lines) into context the moment it fired. In practice that shape
+  invited Claude to also read every file listed under "Additional
+  references" — `roles.md`, `phases.md`, `turns.md`, `ground.md`,
+  `persistence.md` — roughly another 1200 lines. The result was a
+  per-run token floor around 77 KB (~19 k tokens) before any turn had
+  executed. The user's observation — "wie reduzieren wir die Token-
+  Kosten vom council skill ohne Qualitätsverlust (ZERO REGRESSION) um
+  80%? außerdem: der council skill sollte direkt aufgerufen werden und
+  nicht automatisch triggern (vielleicht mit slash council?)" —
+  identified both defects. This release addresses both.
+  - **Primary entry is now `/council`.** The new `commands/council.md`
+    file carries the full turn-gated contract inline: sentinel format,
+    continuation tokens, the FULL/QUICK/AUDIT turn maps, the five MECE
+    roles, the role-turn micro-format, the T2 GROUND requirement for
+    visible tool calls, the T8 VERDICT Chairman template, the eight
+    rigor duties, the anti-pattern list, and the three stopping
+    criteria. A standard run completes without reading a single
+    reference file — the command file is self-sufficient by design.
+  - **`skills/council/SKILL.md` becomes the explicit web fallback.**
+    The frontmatter gains `disable-model-invocation: true`, the
+    description is rewritten to name `/council` as the primary entry
+    and to bind the skill's auto-triggering pool to explicit
+    invocations only ("use the council", "run council"). In Claude AI
+    (Web), where slash commands are unavailable, this SKILL.md remains
+    the usable entry point and carries enough of the contract inline
+    to run a Council without reading references.
+  - **References move to on-demand-only.** `references/roles.md`,
+    `ground.md`, `phases.md`, `turns.md`, and `persistence.md` ship
+    unchanged, but the entry points now explicitly instruct Claude
+    NOT to pre-load them — they are read only when a specific turn
+    needs detail the entry point does not carry. This is the
+    progressive-disclosure pattern Anthropic's `skills/skill-creator`
+    documents as a first-class practice.
+  - **Token-reduction measurement.** Old per-run load
+    (`SKILL.md` + all references eagerly read): 77 004 bytes,
+    approximately 19 251 tokens. New per-run load for a standard
+    /council invocation (`commands/council.md` alone): 15 920 bytes,
+    approximately 3 980 tokens. Empirical reduction: **79.3 %** — on
+    target for the user's 80 % goal. ZERO REGRESSION is structurally
+    enforced: every contract string the 0.4.9 grader checked (33
+    assertions) is either preserved in the new entry points or
+    explicitly ported, and the grader is extended to 38 assertions
+    covering the new architecture.
+  - **Layer-2 grader rewrite (`scripts/grade.py`).** The old grader
+    scanned only `SKILL.md`. The new grader scans both
+    `commands/council.md` and `SKILL.md`, treating most contract
+    strings as "must appear in at least one entry point". Five new
+    assertions cover the 0.5.0 shape: `commands/council.md` exists
+    and has substance (≥ 2 000 chars); the command file declares
+    progressive-disclosure intent ("self-sufficient" / "load on
+    demand"); `SKILL.md` frontmatter carries
+    `disable-model-invocation: true`; `SKILL.md` points at `/council`
+    or `commands/council.md` as the primary entry; the command file
+    carries the full GROUND-FIRST binding sentence, not just the
+    label. Total: 38 contract checks, all passing.
+  - **Why minor bump (0.4.9 → 0.5.0) rather than patch.** The skill
+    gains a new entry point (`/council`), its auto-triggering
+    behaviour changes, and the reference-loading discipline flips
+    from eager to lazy. That is a user-visible behavioural shape
+    change, not a bugfix — minor is the honest versioning call and
+    the user explicitly approved it ("ok") when the plan was
+    presented.
+- **Plugin-standard update — `commands/` as an explicit-invocation
+  contract.** `commands/` is now named in `ROOT_WHITELIST` and
+  documented in both `README.md` and the governance skill's plugin
+  structure reference. The wording is deliberately conditional: the
+  directory is relevant ONLY for explicit-invocation skills (skills
+  the user fires by name rather than have Claude auto-trigger on
+  context). For such a skill the pairing is mandatory and
+  bidirectional: `commands/<name>.md` carries the full contract
+  inline, and its paired `skills/<name>/SKILL.md` must set
+  `disable-model-invocation: true` and also serves as the Claude AI
+  (Web) fallback. Auto-triggering skills
+  (`pdf-umbenennen`, `neomint-plugin-entwicklung`) deliberately have
+  no command file and no flag — that is correct, not a deficiency.
+- **Layer 3 → Layer 1 promotion — bidirectional pairing assertion.**
+  The unprimed audit on this release flagged the command/skill
+  pairing as unenforced (Layer 1 had no check for it). Per the
+  governance Step 5c protocol — "missed by Layer 1 but real → fix
+  it AND add a new Layer 1 assertion" — two new assertions ship in
+  `scripts/plugin-check.py`: *"commands/X.md pairs with a non-auto
+  skill"* (forward direction: a command without a paired
+  non-auto skill would race the skill's auto-trigger) and *"[X]
+  disable-model-invocation skill has a paired command"* (reverse
+  direction: a non-auto skill without a command would be
+  unreachable in Claude Code / Cowork). Both pass on 0.5.0. Total
+  Layer 1 + Layer 2 checks: 53, all green.
+- **Governance skill — negative scope and explicit-invocation
+  guidance.** `skills/neomint-plugin-entwicklung/SKILL.md` gains a
+  *do NOT trigger for* clause in its description (general coding,
+  work in unrelated plugins, consuming rather than authoring the
+  plugin's skills), closing a Layer 3 MEDIUM. Its plugin-structure
+  reference now documents when to choose the explicit-invocation
+  pairing and when to stay auto-triggering, with the decision rule
+  "would firing this without asking surprise the user?".
+- **Ghost-skill heuristic refinement (`plugin-check.py`).** Added a
+  `KNOWN_FRONTMATTER_FIELDS` exclusion set so YAML field names
+  quoted in prose (`disable-model-invocation`, `argument-hint`,
+  `allowed-tools`) are no longer misread as candidate ghost skills.
+
+---
+
 ## 0.4.9 — 2026-04-21
 
 - Repository restructure: plugin sources moved from the repo root into a
