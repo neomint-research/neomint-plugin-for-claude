@@ -10,6 +10,51 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.5.10 — 2026-04-22
+
+New explicit-invocation governance skill `update-plugin` added alongside
+`neomint-plugin-entwicklung`. The new skill generalises the governance
+contract so it applies to any Claude plugin (not just this toolkit) and
+is bound to the `/update-plugin` slash command via
+`plugin/commands/update-plugin.md`; in Claude AI (Web) where slash
+commands are unavailable, its pushy description triggers the same
+contract. The old `neomint-plugin-entwicklung` skill stays in place for
+this release so existing references (CI workflow, internal tooling,
+prior CHANGELOG entries) keep working — it is marked for removal in a
+later release once the migration is complete.
+
+- `plugin/skills/update-plugin/` — SKILL.md, scripts/grade.py,
+  scripts/plugin-check.py, references/plugin-eval.md, evals/evals.json.
+  Contract covers pre-research, skill-creator workflow, three-layer
+  iteration loop, repackaging, and self-optimisation — the same five
+  mechanics the NeoMINT-specific predecessor enforces, phrased for a
+  generic plugin. `disable-model-invocation: true` in the frontmatter
+  prevents auto-triggering so the user remains in charge of when it
+  fires.
+- `plugin/commands/update-plugin.md` — slash-command entry that
+  delegates to the skill's contract inline.
+- `plugin/README.md` — new section under *What's inside* for
+  `update-plugin`, positioning it as the generalised successor and
+  naming `neomint-plugin-entwicklung` as kept-for-transition.
+- **Structural fixes before shipping:** the skill-creator workspace
+  that produced `update-plugin` (`iteration-1/`, `skill-snapshot/`,
+  benchmark data) had been placed at `plugin/skills/update-plugin-
+  workspace/` — a non-skill directory inside the skills tree, which
+  Layer 1's "SKILL.md exists per skill" assertion correctly rejected.
+  The workspace has been moved to `iteration-workspace/update-plugin/`
+  at the repo root (gitignored) so the content is preserved but out
+  of the plugin tree. The `update-plugin` SKILL.md description was
+  also trimmed from 1076 to 990 characters to fit under Anthropic's
+  1024-character truncation limit — purely a length fix, no semantic
+  change. Both fixes are structural, not content-level; a subsequent
+  pass through skill-creator is expected to produce the canonical
+  description.
+- **.gitignore:** `/eval-*.html` and `/iteration-workspace/` added to
+  the runtime-state block, following the same pattern already in place
+  for `/council-*.html` and `/skill-creator-*/`.
+
+---
+
 ## 0.5.9 — 2026-04-21
 
 Zwei kleine, aber register-kritische Edits am `council` skill nach

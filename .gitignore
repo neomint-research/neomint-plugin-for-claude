@@ -61,6 +61,8 @@ evals/cache/
 /eval_metadata.json
 /skill-creator-*/
 /plugin-check-report.json
+/eval-*.html
+/iteration-workspace/
 #
 # pdf-umbenennen has no runtime state files (it only renames inputs in
 # place), so nothing needed here. If a future skill adds runtime

@@ -1,0 +1,49 @@
+{
+  "skill_name": "update-plugin",
+  "evals": [
+    {
+      "id": 1,
+      "name": "trigger-vague",
+      "prompt": "Ich will dem NeoMINT-Plugin einen neuen Skill hinzufügen, der Rechnungen aus PDFs extrahiert. Kannst du das machen?",
+      "expected_output": "Skill triggers; reply in German; first action mentions Step 0 (Pre-research) before any other step.",
+      "assertions": [
+        {"id": "a1", "type": "regex_any", "patterns": ["Step 0", "Schritt 0", "Vorrecherche", "Pre-research"], "target": "outputs/reply.md", "rationale": "Step 0 must be named as the next action."},
+        {"id": "a2", "type": "regex_any", "patterns": ["update-plugin", "neomint-plugin-entwicklung"], "target": "outputs/skill_consulted.txt", "rationale": "The governance skill must be consulted."},
+        {"id": "a3", "type": "regex_absent", "pattern": "skill-creator skill aufrufen|invoke skill-creator now|skill-creator startet jetzt", "target": "outputs/reply.md", "rationale": "Must NOT jump straight to Step 2 — Step 0 must come first."}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "skip-discipline",
+      "prompt": "Ich hab den Skill schon fertig geschrieben in skills/invoice-extract/SKILL.md. Bitte nur noch paketieren.",
+      "expected_output": "Skill pushes back; cites Step 0 and Step 2 explicitly; does not cave to 'just package it'.",
+      "assertions": [
+        {"id": "a1", "type": "regex_any", "patterns": ["Step 2", "Schritt 2", "skill-creator"], "target": "outputs/reply.md", "rationale": "Must cite Step 2 / skill-creator requirement."},
+        {"id": "a2", "type": "regex_any", "patterns": ["Step 0", "Schritt 0", "Vorrecherche", "Pre-research"], "target": "outputs/reply.md", "rationale": "Must cite Step 0 mandatory pre-research."},
+        {"id": "a3", "type": "regex_absent", "pattern": "ich packe jetzt|paketiere jetzt|build the package now|let me package", "target": "outputs/reply.md", "rationale": "Must NOT cave and start packaging."},
+        {"id": "a4", "type": "regex_any", "patterns": ["update-plugin", "neomint-plugin-entwicklung"], "target": "outputs/skill_consulted.txt", "rationale": "Skill must be consulted."}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "slash-command",
+      "prompt": "/update-plugin — ich will die Description vom pdf-umbenennen-Skill schärfer machen, er triggert zu selten",
+      "expected_output": "Slash command resolves to commands/update-plugin.md, which loads skills/update-plugin/SKILL.md, which then runs Step 0.",
+      "assertions": [
+        {"id": "a1", "type": "regex_any", "patterns": ["commands/update-plugin.md"], "target": "outputs/files_opened.txt", "rationale": "Must open the command file first."},
+        {"id": "a2", "type": "regex_any", "patterns": ["skills/update-plugin/SKILL.md"], "target": "outputs/files_opened.txt", "rationale": "Must then load the skill from the command."},
+        {"id": "a3", "type": "regex_any", "patterns": ["Step 0", "Schritt 0", "Vorrecherche", "Pre-research", "Forschungsergebnis"], "target": "outputs/reply.md", "rationale": "Must execute Step 0 as first user-visible action."}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "negative-trigger",
+      "prompt": "Kannst du mir helfen das Council-Skill-Ergebnis in einen Slack-Post zu verwandeln?",
+      "expected_output": "No skill should trigger — pure formatting/transformation request, none of the skills apply.",
+      "assertions": [
+        {"id": "a1", "type": "regex_any", "patterns": ["^none$", "^None$", "^keiner$"], "target": "outputs/skill_consulted.txt", "rationale": "Must NOT trigger any skill."},
+        {"id": "a2", "type": "regex_absent", "pattern": "Step 0|Schritt 0|Vorrecherche|Pre-research", "target": "outputs/reply.md", "rationale": "Must not invoke governance pipeline for a formatting request."}
+      ]
+    }
+  ]
+}

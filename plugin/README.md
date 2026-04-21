@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.5.9` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.5.10` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -32,9 +32,13 @@ It runs as a **live, turn-gated deliberation**: one turn per assistant message (
 
 Renames scanned PDF documents based on their content — date, sender, subject — following `yyyy-mm-dd_Sender_Subject-short.pdf`. Reads files in parallel batches. Triggers on phrases like "rename scans", "clean up ScanSnap folder", "name files by date and sender".
 
+### `update-plugin`
+
+Explicit-invocation governance skill for updating any Claude plugin — adding a new skill, modifying an existing skill, updating plugin standards, or repackaging. Enforces pre-research, the official `skill-creator` workflow for every content change, the three-layer iteration loop, and repackaging after every change. Proposes improvements to the standard or to itself after every run. Primary entry is `/update-plugin` (see [`commands/update-plugin.md`](commands/update-plugin.md)); the description-driven trigger is the fallback for Claude AI (Web). This is the generalised successor to `neomint-plugin-entwicklung` — both coexist for now so in-flight references stay valid; new plugin work should prefer `update-plugin`.
+
 ### `neomint-plugin-entwicklung`
 
-The governance skill that accompanies every change to the plugin itself. It ensures the official `skill-creator` skill is used for content changes, mandates pre-research against Anthropic's own repositories, enforces a three-layer iteration loop, and repackages the plugin after every change. This is the skill that makes the other two keep working.
+The original governance skill, NeoMINT-specific. Same mechanics as `update-plugin` but phrased around this toolkit's standards directly. Kept alongside `update-plugin` during the transition; expect it to be removed in a future release once all references are migrated.
 
 ---
 
