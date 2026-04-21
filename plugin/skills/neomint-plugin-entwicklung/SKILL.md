@@ -28,20 +28,25 @@ Read `../_shared/language.md` and apply the output language rules defined there.
 ## Environment detection
 
 Read `../_shared/environments.md` and handle accordingly.
-Web fallback: Since plugin development requires file access, explain to the user in
-Claude AI (Web) that a folder is needed for this workflow and guide them to use Cowork
-or Claude Code instead. You can still help conceptually in the web (design structure,
-draft SKILL.md content) without creating actual files.
+The web fallback for this skill is described below under
+"Procedure in Claude AI (Web)".
 
 ---
 
-## Step 0 — Pre-research (mandatory before every change)
+## Procedure with file access (Claude Code & Cowork)
+
+This is the full plugin-development loop. Execute it in order, from Step 0 to
+Step 5, for every change to the plugin. Each step carries its own contract;
+Step 5's consistency loop is the gate that must close fully before the plugin
+is packaged.
+
+#### Step 0 — Pre-research (mandatory before every change)
 
 Before making any change to the plugin, an online research check for the current gold
 standard is required. Goal: ensure the plugin is aligned with Anthropic's latest
 recommendations and established community practice.
 
-### 0a — Anthropic GitHub (primary source)
+#### 0a — Anthropic GitHub (primary source)
 
 Check the official Anthropic repositories for the current state of skills, plugins, and
 the skill-creator workflow:
@@ -54,14 +59,14 @@ Search for relevant terms: "skill", "plugin", "SKILL.md", "skill-creator".
 Use WebFetch or WebSearch. Briefly document what was found and whether there are updates
 that affect this plugin.
 
-### 0b — Community research (secondary source)
+#### 0b — Community research (secondary source)
 
 Supplementary web search for community recommendations and best practices:
 
 - Search terms: "Claude Code skills best practices", "claude plugin development", "SKILL.md conventions"
 - Sources: Reddit (r/ClaudeAI), GitHub Discussions, relevant blogs
 
-### 0c — Conflict resolution
+#### 0c — Conflict resolution
 
 When Anthropic's guidelines and community recommendations conflict:
 
@@ -69,7 +74,7 @@ When Anthropic's guidelines and community recommendations conflict:
 
 Briefly document the conflict and justify why Anthropic's guideline was chosen.
 
-### 0d — Research summary
+#### 0d — Research summary
 
 Present a brief summary to the user:
 
@@ -84,7 +89,7 @@ Only proceed to Step 1 after this summary.
 
 ---
 
-## Step 1 — Clarify the goal
+### Step 1 — Clarify the goal
 
 Before starting, determine exactly what needs to change:
 
@@ -97,7 +102,7 @@ Ask if unclear.
 
 ---
 
-## Step 2 — Skill-creator requirement (full loop, not just the draft)
+### Step 2 — Skill-creator requirement (full loop, not just the draft)
 
 For every creation or content change of a skill, without exception:
 
@@ -109,13 +114,13 @@ Then invoke the skill-creator. The correct invocation is the `Skill` tool with
 manually and paraphrasing. The Skill tool is what loads the full workflow (interview,
 draft, testing, iteration) and puts it in context.
 
-### 2a — Write the first draft
+#### 2a — Write the first draft
 
 Follow the skill-creator's guidance: capture intent, interview where needed, produce
 a SKILL.md draft (plus `references/` files where the content exceeds ~400 lines or
 has multiple independent sub-domains).
 
-### 2b — Run the iteration loop in full (mandatory, no exceptions)
+#### 2b — Run the iteration loop in full (mandatory, no exceptions)
 
 After the draft, the skill-creator loop is **not optional and not truncatable**,
 even if the draft looks clean:
@@ -152,11 +157,11 @@ The iteration loop exception does not have a carve-out — if Step 2 triggers, 2
 
 ---
 
-## Step 3 — Quality checks before finalising
+### Step 3 — Quality checks before finalising
 
 Before the plugin is packaged, check every changed or new skill:
 
-### Required checks
+#### Required checks
 
 - [ ] **Pre-research completed** — Was Step 0 fully executed and documented?
 - [ ] **SKILL_TEMPLATE compliance** — Does the structure match the template in `SKILL_TEMPLATE.md`?
@@ -171,7 +176,7 @@ If deficiencies are found: correct before continuing.
 
 ---
 
-## Step 4 — Repackage the plugin
+### Step 4 — Repackage the plugin
 
 > **Build-artefact rule.** Every transient artefact produced during packaging,
 > grading, or evaluation — intermediate zips, extracted source trees, grader
@@ -235,7 +240,7 @@ for download via a `computer://` link.
 
 ---
 
-## Step 5 — Plugin-level iteration loop (three layers)
+### Step 5 — Plugin-level iteration loop (three layers)
 
 This step runs after every change **before** packaging. It is the plugin-level
 analogue of the skill-creator's test-and-improve loop: the plugin change is
@@ -245,7 +250,7 @@ complete pass.
 Mechanics and rationale are in `references/plugin-eval.md`. The summary
 below is load-bearing and must be executed in full.
 
-### 5a — Layer 1: Structural check (runnable)
+#### 5a — Layer 1: Structural check (runnable)
 
 Run the bundled grading script:
 
@@ -265,7 +270,7 @@ no stray files at the plugin root (whitelist).
 Exit 0 means Layer 1 passes. Exit 1 means at least one assertion failed —
 fix it and re-run.
 
-### 5b — Layer 2: Per-skill evals
+#### 5b — Layer 2: Per-skill evals
 
 Layer 2 asks: did every skill's own eval loop close? The grading script
 looks for `skills/<name>/scripts/grade.py` or
@@ -275,21 +280,39 @@ else as FAIL. If neither exists, the skill is recorded as SKIP
 (informational — not a failure, but a gap to close when that skill is
 next iterated).
 
-### 5c — Layer 3: Independent audit subagent
+#### 5c — Layer 3: Independent audit subagent
 
 Spawn a single subagent with a clean prompt, **unprimed**, to inspect
 the plugin fresh:
 
 ```
 I have a plugin at <plugin-root>. Inspect it without preconditioning and
-report, under 400 words:
+report, under 400 words.
 
-(a) Standards compliance gaps (SKILL.md structure, frontmatter, language
-    and environment blocks, internal references).
-(b) Skill-quality concerns (unclear descriptions, missing triggers, weak
-    negative scope, unclear web fallback).
-(c) Documentation mismatches (README claims vs. actual state).
-(d) Anything surprising or smelly.
+For each finding, classify two things:
+
+1. CATEGORY (a-e):
+   (a) Standards compliance gaps — SKILL.md structure, frontmatter,
+       language and environment blocks, internal references.
+   (b) Skill-quality concerns — unclear descriptions, missing triggers,
+       weak negative scope, unclear web fallback.
+   (c) Documentation mismatches — README claims vs. actual state.
+   (d) Slash-command / skill pairing issues.
+   (e) Anything surprising or smelly.
+
+2. KIND:
+   - STRUCTURE — a contract is violated: a required section is missing,
+     a reference doesn't resolve, a version is out of sync, a flag is
+     absent where the standard mandates it, the archive contains stray
+     content. These should be Layer 1 assertions if they aren't already.
+   - WORDING — the text is merely inconsistent across files, unclear,
+     or open to misreading; no contract is violated. Fix the wording.
+     Do NOT promote these into Layer 1 assertions.
+
+Also classify severity (HIGH / MEDIUM / LOW) separately — but apply
+severity after KIND, because a pure WORDING drift is almost never HIGH
+even when it looks dramatic in isolation. A STRUCTURE violation is
+almost always at least MEDIUM.
 
 Only report findings, not a plan. No recommendations beyond "this is a
 gap".
@@ -299,14 +322,21 @@ Collect the findings. Cross-check against the Layer 1 report. For each
 finding:
 
 - Already caught by Layer 1 → confirmation; proceed.
-- Missed by Layer 1 but real → fix it AND add a new Layer 1 assertion
-  for it in `scripts/plugin-check.py`. Note the new assertion in 5e.
+- Missed by Layer 1, **KIND=STRUCTURE**, real → fix it AND add a new
+  Layer 1 assertion for it in `scripts/plugin-check.py`. Note the new
+  assertion in 5e.
+- Missed by Layer 1, **KIND=WORDING**, real → fix the wording only; do
+  NOT add a Layer 1 assertion. Wording drift is not a structural
+  contract and would require fuzzy matching to automate, which
+  generates false positives. Layer 3 catches these cheaply on the next
+  pass; that is the right division of labour.
 - False positive → document in 5e why not.
 
 Layer 3 cannot be replaced by assertions — its role is to find the
-unknown-unknowns that grow the assertion set over time.
+unknown-unknowns that grow the assertion set over time, and to flag
+the wording inconsistencies that Layer 1 is not designed to catch.
 
-### 5d — Loop to closure
+#### 5d — Loop to closure
 
 ```
 loop:
@@ -324,7 +354,7 @@ The loop closes only when a single complete pass has zero real failures
 across all three layers. No shortcuts. The plugin is only packaged after
 a fully positive pass.
 
-### 5e — Self-optimisation (after every change)
+#### 5e — Self-optimisation (after every change)
 
 Review the change and the findings from 5a/5b/5c. Answer:
 
@@ -351,6 +381,34 @@ Shall I implement these?
 ```
 
 Only implement standard improvements with user confirmation.
+
+---
+
+## Procedure in Claude AI (Web)
+
+This skill authors and maintains a Claude plugin — which means it writes
+files, runs scripts, spawns subagents, and rebuilds a `.plugin` archive.
+None of those are possible in Claude AI (Web), where there is no filesystem
+and no subprocess execution.
+
+The web fallback is therefore deliberately narrow:
+
+1. **State the constraint plainly.** Tell the user that full plugin
+   development requires file access, and that Cowork or Claude Code is the
+   right environment for this workflow.
+2. **Offer conceptual help instead.** In the web, this skill can still
+   help: design a new skill's structure, draft a SKILL.md body, sketch
+   references, reason about the Layer 3 audit prompt, or work through a
+   self-optimisation proposal — all as text the user can copy into their
+   file-access environment later.
+3. **Do not simulate file operations.** Never pretend to run
+   `plugin-check.py`, never invent assertion counts, never claim a layer
+   has passed. The three-layer loop in Step 5 is a file-and-subprocess
+   contract; claiming a pass without execution is a standard violation.
+4. **Hand off cleanly.** When the user is ready to actually ship, produce
+   a short hand-off note listing the files that need to change, the
+   version bump, and the CHANGELOG entry — so resuming in Cowork or
+   Claude Code is a single paste rather than a re-derivation.
 
 ---
 

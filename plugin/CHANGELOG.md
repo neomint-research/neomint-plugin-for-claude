@@ -10,6 +10,57 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.5.1 — 2026-04-21
+
+- **`SKILL_TEMPLATE.md` — "Invocation model" decision up front.** The
+  template now opens (before Language, before Environment, before any
+  procedure) with an explicit auto-trigger vs explicit-invocation
+  decision: the rule is "would firing this without asking surprise
+  the user?". For *yes*, the template spells out the bidirectional
+  pairing contract (`commands/<name>.md` + `disable-model-invocation: true`
+  in frontmatter + SKILL.md serves as Web fallback) and notes that
+  Layer 1 enforces it. For *no*, nothing special. The frontmatter now
+  carries a commented-out `disable-model-invocation: true` line that
+  authors uncomment when needed. This change prevents a recurrence of
+  the 0.5.0 situation, where `council` had to be refactored from
+  auto-trigger to explicit-invocation post-hoc — the decision is now
+  surfaced at the start of authoring, not after the first eval loop.
+- **Layer 3 audit prompt — STRUCTURE vs WORDING kind split.**
+  `skills/neomint-plugin-entwicklung/SKILL.md` now asks the unprimed
+  auditor to classify each finding along two orthogonal axes: category
+  (a-e, unchanged) *and* kind (STRUCTURE — a contract is violated; or
+  WORDING — text is merely inconsistent or unclear). Severity is
+  applied after kind, because a pure wording drift is almost never
+  HIGH and a structural violation is almost always at least MEDIUM.
+  The Step 5c resolution path splits accordingly: STRUCTURE findings
+  that Layer 1 missed get fixed AND promoted into a new Layer 1
+  assertion; WORDING findings get fixed but do NOT get promoted —
+  wording drift would require fuzzy matching to automate, produces
+  false positives, and Layer 3 catches it cheaply on the next pass.
+  The rationale is documented inline so future iterations of the
+  governance skill understand why the split exists.
+- **Layer 1 — required Procedure headings promoted to an assertion.**
+  The 0.5.1 Layer 3 audit (the first run of the new
+  STRUCTURE/WORDING-classified prompt) flagged a real STRUCTURE gap:
+  `skills/neomint-plugin-entwicklung/SKILL.md` was silently missing
+  both `## Procedure with file access (Claude Code & Cowork)` and
+  `## Procedure in Claude AI (Web)` — the two canonical sections the
+  standard has required since 0.4.x. Layer 1 was not checking for
+  them. Per Step 5c, both were fixed in the governance skill (Steps
+  0–5 now live under the canonical `Procedure with file access`
+  heading; a dedicated `Procedure in Claude AI (Web)` section defines
+  the web fallback) AND promoted into two new Layer 1 assertions in
+  `scripts/plugin-check.py`. Six new structural checks (2 per skill
+  × 3 skills) now run on every build; the full Layer 1+2 pass count
+  is 59/59.
+- **Why this is a patch bump (0.5.0 → 0.5.1), not minor.** All three
+  changes are refinements to how authoring and auditing are framed
+  and enforced — no new capability, no behavioural change to any
+  skill at runtime, no archive-layout change. Per the versioning
+  scheme, patch is the right call.
+
+---
+
 ## 0.5.0 — 2026-04-21
 
 - `council` skill: progressive-disclosure refactor and slash-command

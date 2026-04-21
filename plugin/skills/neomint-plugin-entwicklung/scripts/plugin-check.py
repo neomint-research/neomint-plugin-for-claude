@@ -403,6 +403,22 @@ def run_layer1(root: Path, rep: Report) -> None:
                 "_shared/environments.md" in text)
         rep.add(f"[{name}] SKILL.md not mid-sentence truncated", 1,
                 _ends_well(_tail_line(skill_md)), _tail_line(skill_md)[:80])
+        # Required-block check: every SKILL.md must declare the two canonical
+        # procedure sections defined by the plugin standard (README
+        # "Plugin standards" and SKILL_TEMPLATE.md). Promoted to Layer 1 in
+        # 0.5.1 after a Layer 3 audit found the governance skill itself
+        # silently missing both headings — the kind of drift a wording check
+        # can't catch but a structural assertion can.
+        rep.add(
+            f"[{name}] has '## Procedure with file access (Claude Code & Cowork)'",
+            1,
+            "## Procedure with file access (Claude Code & Cowork)" in text,
+        )
+        rep.add(
+            f"[{name}] has '## Procedure in Claude AI (Web)'",
+            1,
+            "## Procedure in Claude AI (Web)" in text,
+        )
         # check referenced files under references/ actually exist — but only
         # references mentioned in *prose*. Strip fenced code blocks and
         # backticked spans first so placeholders like `references/X.md` or
