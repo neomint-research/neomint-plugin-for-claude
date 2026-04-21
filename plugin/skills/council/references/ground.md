@@ -1,4 +1,4 @@
-# COUNCIL — Grounding Discipline (Phase 1)
+# COUNCIL — Grounding Discipline (T2 GROUND)
 
 The Council never discusses a question before it is grounded. GROUND is
 its own phase — not a Scout sub-task, not a background check — because

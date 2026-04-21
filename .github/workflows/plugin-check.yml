@@ -27,28 +27,28 @@ jobs:
 
       - name: Layer 1 — plugin-check
         run: |
-          python3 skills/neomint-plugin-entwicklung/scripts/plugin-check.py
+          python3 plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py plugin
 
       - name: Layer 2 — council grader
         run: |
-          if [ -f skills/council/scripts/grade.py ]; then
-            python3 skills/council/scripts/grade.py
+          if [ -f plugin/skills/council/scripts/grade.py ]; then
+            python3 plugin/skills/council/scripts/grade.py
           else
             echo "no council grader — skipping"
           fi
 
       - name: Layer 2 — pdf-umbenennen grader
         run: |
-          if [ -f skills/pdf-umbenennen/scripts/grade.py ]; then
-            python3 skills/pdf-umbenennen/scripts/grade.py
+          if [ -f plugin/skills/pdf-umbenennen/scripts/grade.py ]; then
+            python3 plugin/skills/pdf-umbenennen/scripts/grade.py
           else
             echo "no pdf-umbenennen grader — skipping"
           fi
 
       - name: Layer 2 — neomint-plugin-entwicklung grader
         run: |
-          if [ -f skills/neomint-plugin-entwicklung/scripts/grade.py ]; then
-            python3 skills/neomint-plugin-entwicklung/scripts/grade.py
+          if [ -f plugin/skills/neomint-plugin-entwicklung/scripts/grade.py ]; then
+            python3 plugin/skills/neomint-plugin-entwicklung/scripts/grade.py
           else
             echo "no neomint-plugin-entwicklung grader — skipping"
           fi

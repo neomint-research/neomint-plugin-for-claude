@@ -64,10 +64,11 @@ MANAGEMENT: <one-line plain-language recommendation>
 
 ## Update rules
 
-**Read first, then write.** When `COUNCIL.md` exists, read it before
-Phase 0. The Cartographer uses "Known dependency patterns" to skip
-already-mapped surface; the Chairman uses prior verdicts to flag
-contradictions between the new judgment and the old one.
+**Read first, then write.** When `COUNCIL.md` exists, read it during
+T1 ORIENT — before T3 CARTOGRAPHER runs, so the "Known dependency
+patterns" block can skip already-mapped surface, and before T8 VERDICT,
+so the Chairman can flag contradictions between the new judgment and
+prior recorded verdicts.
 
 **Append, don't overwrite.** New sessions are appended at the bottom of
 the Sessions block. The file is a trail, not a snapshot. If a later
@@ -89,7 +90,8 @@ stays in the session entry, not the aggregate.
 ## Cross-environment handling
 
 ### Claude Code (CODE-MODE)
-- Read on Phase 0, write on Phase 3.
+- Read during T1 ORIENT, write during T8 VERDICT (the closing Chairman
+  turn is where the new session entry gets appended).
 - Edit in place (git-tracked; the user can version-control the Council
   trail like any other artifact).
 
@@ -101,10 +103,10 @@ stays in the session entry, not the aggregate.
 ### Claude AI (Web)
 - No direct filesystem.
 - If the user pastes in a prior `COUNCIL.md` (or uploads one), use it as
-  context for Phase 0.
-- At the end of Phase 3, offer the updated `COUNCIL.md` as a downloadable
-  markdown artifact. Make it clear: "Save this and paste it back next
-  time — the Council picks up where it left off."
+  context during T1 ORIENT.
+- At the end of T8 VERDICT, offer the updated `COUNCIL.md` as a
+  downloadable markdown artifact. Make it clear: "Save this and paste
+  it back next time — the Council picks up where it left off."
 
 ---
 

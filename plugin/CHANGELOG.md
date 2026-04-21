@@ -10,6 +10,114 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.4.9 — 2026-04-21
+
+- Repository restructure: plugin sources moved from the repo root into a
+  dedicated `plugin/` subdirectory, and the repository gains its own
+  top-level `README.md` distinct from the plugin's. The motivation: the
+  repo is both a shipping vehicle for the plugin and a record of the
+  governance research that produced it. Those two audiences want
+  different entry points. The repo-level README introduces the research
+  angle (Ground-Before-Discuss, three-layer iteration loop,
+  unprimed-audit workflow) and points at `plugin/` for the shipping
+  artefact. The plugin's own README is untouched in substance — it still
+  documents install, skills, and plugin standards — but its build
+  command now runs from inside `plugin/` instead of from the repo root.
+  `LICENSE` and `SECURITY.md` live both at the repo root (for GitHub
+  discovery) and inside `plugin/` (so the `.plugin` bundle remains
+  Apache-2.0 §4-compliant for redistribution). The CI workflow at
+  `.github/workflows/plugin-check.yml` now invokes `plugin-check.py`
+  with `plugin` as the explicit root argument; per-skill graders are
+  addressed via `plugin/skills/…` paths.
+
+---
+
+## 0.4.8 — 2026-04-21
+
+- `council` skill: turn-gated live deliberation. Previously the Council
+  could render the entire five-phase judgment as a single wall-of-text
+  assistant message, which made the deliberation impossible to follow
+  live, impossible to interrupt at a specific role, and trivial to
+  shortcut under token pressure. The user's observation — "der user
+  muss die Diskussion live mitverfolgen können … wie einem council
+  wirklich zuzuhören" — identified this as the core defect that
+  remained after 0.4.7. The fix reshapes the skill around a one-phase-
+  per-assistant-message contract:
+  - **Turn map.** FULL now runs as eight turns (T1 ORIENT · T2 GROUND ·
+    T3 CARTOGRAPHER · T4 ANALYST · T5 ADVERSARY · T6 SCOUT · T7 OPERATOR
+    · T8 VERDICT). QUICK compresses to three turns. AUDIT uses FULL as
+    a baseline and the Chairman may insert DEEPEN turns on the fly;
+    K grows visibly, never silently.
+  - **Sentinel contract.** Every phase message ends with exactly
+    `=== TURN <N>/<K> COMPLETE — <PHASE NAME> ===` followed by an
+    AWAITING-USER line listing the accepted continuation tokens
+    (`NEXT`, `REBUTTAL`, `DEEPEN`, `BRANCH`, `ABORT`). The sentinel is
+    the hard stop — content after it is a contract violation. This is
+    the structural fix to the Claude-Code multi-phase-workflow failure
+    mode documented in `anthropics/claude-code` issue #21672.
+  - **Role turn micro-format.** Each role turn opens with an Axis
+    line, a one-sentence Thesis, a hardest-first Finding, a mandatory
+    Cross-reference (from T4 onward: a direct quote from a prior role),
+    a mandatory Dissent or reasoned concurrence, and a Resolvable? line.
+    The micro-format forces the turns to compound instead of staying
+    five parallel essays, and gives the grader structural anchors.
+  - **Visible tool calls in GROUND.** T2 requires at least one real
+    `WebSearch` / `WebFetch` invocation when web access is available.
+    Narrating "I searched for X" without the actual tool call is a
+    contract violation — the user must see the grounding was performed,
+    not asserted.
+  - **Chairman citation rule.** T8 VERDICT now contains a mandatory
+    `## Citations` block with a short direct quote from each of T3–T7,
+    attributed by turn number. The Chairman adds no new findings under
+    its own voice — if a gap is visible, a DEEPEN turn is inserted
+    instead. This is how the Chairman visibly *listens* rather than
+    summarising.
+  - **References.** `references/turns.md` added as the single source of
+    truth for the live-turn contract, including exact sentinel format,
+    continuation-token semantics, role-turn micro-format, worked FULL
+    and QUICK examples, and anti-shortcut enforcement. `references/
+    phases.md` rewritten with turn-numbered section headers (T1..T8).
+  - **Layer 2 grader.** `skills/council/scripts/grade.py` extended from
+    20 to 33 assertions, all enforcing the new contract: turn-gated
+    section present, sentinel template exact, continuation tokens
+    present, role micro-format markers present, Chairman citation
+    block present, turn counts declared (FULL=8, QUICK=3), NO-DOWNGRADE
+    for K declared, `turns.md` exists with worked examples and
+    references #21672, anti-pattern "two phases in one message" called
+    out, turn-header template exact, `references/phases.md` carries
+    T1..T8 labels. Two legacy assertions (Persistence line format,
+    phase-block ordering) were updated to accept the new turn-numbered
+    form without loosening their intent.
+  - **Layer 3 finding → Layer 2 assertion (self-optimisation).** The
+    first 0.4.8 audit pass returned `HOLD` on one MEDIUM: the 32-
+    assertion grader had locked the *phase-numbering convention* in
+    `SKILL.md` and `phases.md` but did not scan the other reference
+    files. `references/persistence.md` still used "Phase 0" / "Phase 3"
+    from the pre-0.4.8 shape in three places, and `references/ground.md`
+    had "Phase 1" in its title — both would have decoupled the reference
+    corpus from the skill body without any grader firing. Fix was
+    twofold: correct the four stale labels, and add assertion #33 — a
+    stale-phase scanner that forbids `Phase 0`..`Phase 4` across
+    `SKILL.md` and every `references/*.md`, with an escape hatch
+    (nearby "old" / "legacy" / "previous" / "pre-0.4.8" prose) for
+    intentional historical references. A negative test (injecting
+    `Phase 0` into persistence.md with no qualifier) confirms the new
+    assertion fires. Total: 33/33 PASS.
+  - **Description rewrite.** The YAML folded-scalar description now
+    names the live-turn contract explicitly — "delivered turn by turn
+    — one phase per message, ending in a sentinel so the user can
+    follow and intervene" — so the trigger signals include the
+    deliberation shape, not just the role roster. The full phrase
+    "turn-gated live deliberation" remains in the body heading at
+    line 21. The description has been trimmed to stay under the
+    1024-char hard limit (995 chars).
+- No changes to `pdf-umbenennen` or `neomint-plugin-entwicklung` in this
+  cycle. The governance skill's Step 2 exception does **not** apply here
+  — this is a content change of a skill, so `skill-creator` was used for
+  the redesign.
+
+---
+
 ## 0.4.7 — 2026-04-21
 
 - `SECURITY.md`: security-report contact changed from the placeholder
