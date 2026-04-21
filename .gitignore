@@ -27,19 +27,41 @@ node_modules/
 evals/reports/
 evals/cache/
 
-# Shipping artefact — the canonical *.plugin file lives inside plugin/
+# Build artefacts
+# ---------------
+# The canonical shipping artefact lives at plugin/neomint-toolkit.plugin
 # and IS committed so users can install directly from a checkout.
-# Transient build zips elsewhere (versioned artefacts, test bundles)
-# should not be committed.
+# Everything else — /tmp build scratch directories, versioned release
+# bundles that accumulate during iteration, test/throwaway bundles at
+# the repo root — stays out of git. Old versions are reachable via git
+# tags and GitHub Releases, not by leaving files in the tree.
 /tmp/
 /pluginbuild/
 /neomint-toolkit-*.plugin
+/*.plugin
+!plugin/neomint-toolkit.plugin
 
-# Council runtime + iteration state. COUNCIL.md is the skill's
-# per-workspace memory file; the review/eval HTMLs and iteration
-# summary MDs are transient development output. None of these
-# belong in git.
+# Skill runtime state
+# -------------------
+# Files the plugin's own skills write into the working directory when
+# they are exercised. When the working directory happens to be this
+# repository (which is the case when we dogfood the plugin on itself),
+# these land at the repo root. None of them belong in git — they are
+# per-workspace memory, per-run caches, or iteration output.
+#
+# council:
 /COUNCIL.md
 /COUNCIL-*.md
-/council-*.html
 /GROUNDING-CACHE.md
+/council-*.html
+/council-*.md
+#
+# skill-creator iteration + governance grader output:
+/ITERATION_REPORT.md
+/eval_metadata.json
+/skill-creator-*/
+/plugin-check-report.json
+#
+# pdf-umbenennen has no runtime state files (it only renames inputs in
+# place), so nothing needed here. If a future skill adds runtime
+# state, extend this block rather than inventing a new one.

@@ -67,7 +67,28 @@ zip -r neomint-toolkit.plugin . \
 
 After packaging, run Layer 1 again. The `Shipping archive contents are clean` assertion verifies nothing snuck in.
 
-### 7. Self-optimisation
+### 7. Cut the release
+
+The canonical shipping archive lives at `plugin/neomint-toolkit.plugin` in the repository and is committed alongside the source change it corresponds to. Public releases are cut by pushing a `vX.Y.Z` git tag that matches `plugin/.claude-plugin/plugin.json`:
+
+```bash
+git tag v0.5.9
+git push origin v0.5.9
+```
+
+The tag push triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
+
+1. Asserts that the tag version matches `plugin.json` and the top entry in `CHANGELOG.md`.
+2. Re-runs `plugin-check.py` (Layer 1 + Layer 2) against `plugin/`.
+3. Rebuilds the `.plugin` archive deterministically with the same exclusion rules documented above.
+4. Extracts the matching `## X.Y.Z — YYYY-MM-DD` block from `CHANGELOG.md` as release notes.
+5. Publishes a GitHub Release with the rebuilt `neomint-toolkit.plugin` attached as an asset.
+
+Older versions are reachable via their GitHub Release assets — don't keep versioned `.plugin` files in the working tree. `.gitignore` blocks `/neomint-toolkit-*.plugin` at the repo root precisely to prevent that accumulation.
+
+If a tag was pushed without a corresponding plugin.json or CHANGELOG update, the workflow fails loudly. Fix the mismatch locally and force-push the tag (`git tag -f vX.Y.Z && git push origin vX.Y.Z --force`) — the release itself is idempotent.
+
+### 8. Self-optimisation
 
 After every change, answer:
 - Did the change reveal a gap in the standard — something that was unclear or repeatedly discussed?

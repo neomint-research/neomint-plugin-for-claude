@@ -1,0 +1,130 @@
+name: release
+
+# Clean release workflow.
+#
+# Trigger: push of a vX.Y.Z tag. The workflow asserts that the tag
+# version matches plugin/.claude-plugin/plugin.json, rebuilds the
+# canonical shipping archive deterministically, extracts the matching
+# CHANGELOG entry as release notes, and publishes a GitHub Release
+# with the .plugin file attached. Old versions stay reachable via
+# their Release assets without accumulating as files in the tree.
+#
+# Manual dispatch is provided for re-runs; it requires the version
+# to be passed explicitly.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (without leading v, e.g. 0.5.9)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve target version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
+          echo "Target version: $VERSION"
+
+      - name: Assert tag matches plugin.json
+        run: |
+          JSON_VERSION=$(python3 -c "import json,sys; print(json.load(open('plugin/.claude-plugin/plugin.json'))['version'])")
+          TAG_VERSION="${{ steps.v.outputs.version }}"
+          if [ "$JSON_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::plugin.json version ($JSON_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Assert CHANGELOG top entry matches
+        run: |
+          TAG_VERSION="${{ steps.v.outputs.version }}"
+          TOP=$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' plugin/CHANGELOG.md | awk '{print $2}')
+          if [ "$TOP" != "$TAG_VERSION" ]; then
+            echo "::error::CHANGELOG top entry ($TOP) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Run plugin-check (Layer 1 + 2)
+        run: |
+          python3 plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py plugin
+
+      - name: Build canonical .plugin archive
+        run: |
+          cd plugin
+          rm -f neomint-toolkit.plugin
+          python3 <<'PY'
+          import zipfile, os, fnmatch
+          EXCLUDE_DIRS = {'.git', '.github', '.mcpb-cache', 'evals'}
+          EXCLUDE_NAMES = {'CONTRIBUTING.md', '.DS_Store'}
+          EXCLUDE_GLOBS = ['*.plugin']
+          def skip(name, is_dir):
+              if name in EXCLUDE_DIRS: return True
+              if is_dir: return False
+              if name in EXCLUDE_NAMES: return True
+              return any(fnmatch.fnmatch(name, g) for g in EXCLUDE_GLOBS)
+          with zipfile.ZipFile('neomint-toolkit.plugin', 'w', zipfile.ZIP_DEFLATED) as z:
+              for root, dirs, files in os.walk('.'):
+                  dirs[:] = [d for d in dirs if not skip(d, True)]
+                  for f in files:
+                      if skip(f, False): continue
+                      full = os.path.join(root, f)
+                      arc  = os.path.relpath(full, '.').replace(os.sep, '/')
+                      z.write(full, arc)
+          print('built:', os.path.getsize('neomint-toolkit.plugin'), 'bytes')
+          PY
+
+      - name: Extract CHANGELOG entry as release notes
+        id: notes
+        run: |
+          TAG_VERSION="${{ steps.v.outputs.version }}"
+          awk -v v="$TAG_VERSION" '
+            $0 ~ "^## "v" " { flag=1; next }
+            flag && /^## [0-9]+\.[0-9]+\.[0-9]+ / { exit }
+            flag && /^---$/ { next }
+            flag { print }
+          ' plugin/CHANGELOG.md > /tmp/release-notes.md
+          {
+            echo "# NeoMINT Toolkit ${{ steps.v.outputs.tag }}"
+            echo
+            cat /tmp/release-notes.md
+            echo
+            echo "---"
+            echo
+            echo "**Install:** download \`neomint-toolkit.plugin\` from the Assets below and open it with Claude Code or Cowork. For Claude AI (Web), see the plugin [README](https://github.com/${{ github.repository }}/blob/${{ steps.v.outputs.tag }}/plugin/README.md)."
+          } > /tmp/release-body.md
+          echo "body_path=/tmp/release-body.md" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: ${{ steps.v.outputs.tag }}
+          body_path: ${{ steps.notes.outputs.body_path }}
+          files: plugin/neomint-toolkit.plugin
+          fail_on_unmatched_files: true
