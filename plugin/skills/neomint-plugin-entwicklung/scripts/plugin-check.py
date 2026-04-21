@@ -419,6 +419,28 @@ def run_layer1(root: Path, rep: Report) -> None:
             1,
             "## Procedure in Claude AI (Web)" in text,
         )
+        # Canonical heading for the optional references section. The
+        # SKILL_TEMPLATE.md and README plugin-standard both name it
+        # "## Additional references". A skill that lists files under a
+        # differently-named heading (e.g. "## References") is a drift a
+        # wording check can't catch but a structural assertion can.
+        # Only assert if the skill actually has a references/ directory
+        # with content — otherwise the section is legitimately absent.
+        refs_dir = skill_dir / "references"
+        has_refs = refs_dir.is_dir() and any(refs_dir.glob("*.md"))
+        if has_refs:
+            rep.add(
+                f"[{name}] has canonical '## Additional references' heading",
+                1,
+                "## Additional references" in text,
+                "references/ exists — heading must be '## Additional references'",
+            )
+            # Guard against stale legacy name surviving alongside the canonical one.
+            rep.add(
+                f"[{name}] no stale '## References' heading",
+                1,
+                not re.search(r"(?m)^## References\s*$", text),
+            )
         # check referenced files under references/ actually exist — but only
         # references mentioned in *prose*. Strip fenced code blocks and
         # backticked spans first so placeholders like `references/X.md` or

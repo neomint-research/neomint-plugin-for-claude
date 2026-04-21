@@ -419,6 +419,15 @@ Format: `major.minor.fix`
 - **minor** — incremented only on explicit user instruction
 - **fix** — incremented automatically for every change (even small ones)
 
+> **Agent rule (binding):** An agent running this skill may only ever
+> bump the **fix** level. Never unilaterally propose a minor or major
+> bump — not because a refactor feels large, not because the user-facing
+> behavior changes visibly, not because the change touches many files.
+> If a change subjectively warrants more than a fix, deliver the fix
+> bump and ask the user whether they want to re-label it as minor or
+> major. Never the other direction. The judgment of semantic level
+> belongs to the user; the mechanical increment belongs to the agent.
+
 After every change: bump the fix version in `plugin.json`, add an entry to `CHANGELOG.md` (newest on top), and update the version reference in `README.md`.
 
 ## Plugin structure reference

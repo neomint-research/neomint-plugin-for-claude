@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""grade.py — Contract grader for the council skill (0.5.0+).
+"""grade.py — Contract grader for the council skill.
 
-Invoked by plugin-check.py Layer 2. Returns exit 0 if the skill's contract
-is intact across the new dual-file progressive-disclosure architecture:
+Invoked by plugin-check.py Layer 2. Returns exit 0 if the skill's SKILL.md
+still honours every contract promise, otherwise exit 1 with a summary of
+which assertions failed.
 
-    plugin/
-    ├── commands/council.md                 (primary entry — slash command)
-    └── skills/council/
-        ├── SKILL.md                        (web fallback — explicit opt-in)
-        └── references/*.md                 (on-demand only)
+Assertions target the skill's advertised contract, not the LLM's runtime
+behaviour. Runtime behaviour is graded once per iteration via skill-creator
+and captured in evals/ITERATION_REPORT.md — this script protects the
+contract itself against silent regressions.
 
-Most contract assertions pass if the string lives in EITHER the command
-file OR SKILL.md — that gives the 0.5.0 architecture room to move content
-between the entry points without tripping the grader, while still keeping
-the contract anchored. Architecture-specific assertions (frontmatter
-shape, required section headers, slash-command presence) are pinned to
-their canonical file.
+This grader was rewritten for the radically streamlined version of the
+skill. The prior grader had 33 assertions that locked the OLD ceremony
+(sentinels, labeled Thesis/Finding/Cross-reference/Dissent/Resolvable
+blocks, QUICK/FULL/AUDIT mode zoo, Phase 0..4 labels, five reference
+files) into the contract. That ceremony was the failure mode the user
+asked us to remove. The new grader protects the disciplines — not the
+packaging.
 """
 
 from __future__ import annotations
@@ -25,27 +26,14 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SKILL_DIR = HERE.parent                       # skills/council/
-SKILL_MD = SKILL_DIR / "SKILL.md"
-PLUGIN_ROOT = SKILL_DIR.parent.parent         # plugin/
-COMMAND_MD = PLUGIN_ROOT / "commands" / "council.md"
+SKILL_MD = HERE.parent / "SKILL.md"
 
 
-def load_skill() -> str:
+def load() -> str:
     if not SKILL_MD.exists():
         print(f"FAIL council: SKILL.md missing at {SKILL_MD}")
         sys.exit(1)
     return SKILL_MD.read_text()
-
-
-def load_command() -> str:
-    # commands/council.md is required for 0.5.0+. Failing to find it is a
-    # hard fail — the slash-command entry point is the primary way the
-    # skill is invoked in Claude Code and Cowork.
-    if not COMMAND_MD.exists():
-        print(f"FAIL council: commands/council.md missing at {COMMAND_MD}")
-        sys.exit(1)
-    return COMMAND_MD.read_text()
 
 
 def contains_all(text: str, needles: list[str]) -> list[str]:
@@ -53,476 +41,503 @@ def contains_all(text: str, needles: list[str]) -> list[str]:
 
 
 def main() -> int:
-    skill = load_skill()
-    cmd = load_command()
-    combined = skill + "\n\n" + cmd          # most assertions check this
+    text = load()
+    lower = text.lower()
     failures: list[str] = []
 
-    # 1. Five MECE roles are explicitly named — in either entry point.
-    missing_roles = contains_all(combined, ["Analyst", "Cartographer", "Adversary", "Scout", "Operator"])
-    if missing_roles:
-        failures.append(f"Roles missing from council entry points: {missing_roles}")
+    # ------------------------------------------------------------------
+    # A. Identity and loadability
+    # ------------------------------------------------------------------
 
-    # 2. Chairman synthesis is named.
-    if "Chairman" not in combined:
-        failures.append("Chairman synthesis not mentioned in either entry point")
-
-    # 3. Phases are named (case-insensitive).
-    lower = combined.lower()
-    missing_phases = [p for p in ["orient", "ground", "map", "council", "verdict"] if p not in lower]
-    if missing_phases:
-        failures.append(f"Phases missing: {missing_phases}")
-
-    # 4. Three depth modes.
-    missing_depth = contains_all(combined, ["QUICK", "FULL", "AUDIT"])
-    if missing_depth:
-        failures.append(f"Depth modes missing: {missing_depth}")
-
-    # 5. Three contexts.
-    missing_ctx = contains_all(combined, ["CODE-MODE", "DOC-MODE", "CHAT-MODE"])
-    if missing_ctx:
-        failures.append(f"Context modes missing: {missing_ctx}")
-
-    # 6. Two-track output.
-    if not (re.search(r"OPERATIVE", combined) and re.search(r"MANAGEMENT", combined)):
-        failures.append("Two-track output (OPERATIVE + MANAGEMENT) not declared")
-
-    # 7. Persistence line in the T8 output template.
-    if "Persistence:" not in combined and "## Persistence" not in combined:
-        failures.append(
-            "Mandatory persistence block missing from output template — "
-            "expected 'Persistence:' (inline) or '## Persistence' (section)"
-        )
-    if "COUNCIL.md" not in combined:
-        failures.append("COUNCIL.md persistence file not documented")
-
-    # 8. Diagnostic question standard includes the mode/context header.
-    if "Mode: DIAGNOSTIC" not in combined:
-        failures.append("Diagnostic question standard missing 'Mode: DIAGNOSTIC' header")
-
-    # 9. Required SKILL.md blocks (pinned to SKILL.md — the web-fallback
-    #    contract requires these section anchors so Claude in Web can
-    #    find the language/environment/procedure guidance deterministically).
-    for header in (
-        "## Language",
-        "## Environment detection",
-        "## Procedure with file access",
-        "## Procedure in Claude AI (Web)",
-    ):
-        if header not in skill:
-            failures.append(f"SKILL.md: {header} section missing")
-
-    # 10. References exist on disk (unchanged — progressive disclosure still
-    #     ships the detailed refs, just doesn't eagerly read them).
-    for ref in ["roles.md", "phases.md", "persistence.md", "ground.md", "turns.md"]:
-        if not (SKILL_DIR / "references" / ref).exists():
-            failures.append(f"references/{ref} missing")
-
-    # 11. YAML description ≤ 1024 chars (Anthropic hard truncation limit).
-    fm_match = re.search(r"^---\s*\n(.*?)\n---\s*\n", skill, re.DOTALL)
-    if fm_match:
+    # A1. YAML frontmatter is present and parseable.
+    fm_match = re.search(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    if not fm_match:
+        failures.append("YAML frontmatter missing from SKILL.md")
+        body = ""
+    else:
         body = fm_match.group(1)
-        desc_match = re.search(r"description:\s*>?\s*\n((?:[ \t]+.+\n?)+)", body)
+
+    # A2. description field present and ≤ 1024 chars folded (Anthropic's
+    #     hard truncation limit for skill descriptions). The 0.4.0-0.4.2
+    #     description was 1382 chars and was silently truncated; the
+    #     user's complaint "council is not recognized" traced to that.
+    if body:
+        desc_match = re.search(
+            r"description:\s*>?\s*\n((?:[ \t]+.+\n?)+)", body
+        )
         if desc_match:
             raw = desc_match.group(1)
-            folded = " ".join(line.strip() for line in raw.splitlines() if line.strip())
+            folded = " ".join(
+                line.strip() for line in raw.splitlines() if line.strip()
+            )
             if len(folded) > 1024:
                 failures.append(
                     f"description exceeds 1024-char hard limit "
                     f"({len(folded)} chars) — will be truncated by Claude"
                 )
         else:
-            failures.append("description field missing from SKILL.md frontmatter")
-    else:
-        failures.append("YAML frontmatter missing from SKILL.md")
+            failures.append("description field missing from frontmatter")
 
-    # 11a. SKILL.md must carry disable-model-invocation: true — the 0.5.0
-    #      explicit-opt-in rule. Auto-triggering is blocked; /council is
-    #      the primary entry in Claude Code / Cowork, and users in Web
-    #      must name the skill explicitly.
-    if fm_match:
-        body = fm_match.group(1)
-        if not re.search(r"disable-model-invocation:\s*true", body):
+    # ------------------------------------------------------------------
+    # B. Structural sections the skill depends on
+    # ------------------------------------------------------------------
+
+    if "## Language" not in text:
+        failures.append("## Language section missing")
+    if "## Environment detection" not in text:
+        failures.append("## Environment detection section missing")
+    if "## Core principle" not in text:
+        failures.append("## Core principle section missing")
+
+    # ------------------------------------------------------------------
+    # C. The five MECE roles + Chairman synthesis
+    # ------------------------------------------------------------------
+
+    missing_roles = contains_all(
+        text,
+        ["Cartographer", "Analyst", "Adversary", "Scout", "Operator"],
+    )
+    if missing_roles:
+        failures.append(
+            f"Roles missing from SKILL.md: {missing_roles} — "
+            f"the five MECE roles are the substance of the skill"
+        )
+    if "Chairman" not in text:
+        failures.append(
+            "Chairman synthesis not mentioned — the Verdict layer "
+            "must be named"
+        )
+
+    # Each role's MECE axis keyword must appear so the axes can't silently
+    # drift. Keep the checks lightweight — substring matches on the
+    # distinctive phrasing from references/roles.md.
+    for phrase, role in [
+        ("What depends on this?", "Cartographer"),
+        ("Is the derivation valid?", "Analyst"),
+        ("What destroys this?", "Adversary"),
+        ("What aren't we seeing?", "Scout"),
+        ("What do we actually do?", "Operator"),
+    ]:
+        if phrase not in text:
             failures.append(
-                "SKILL.md frontmatter missing 'disable-model-invocation: true' "
-                "— the 0.5.0 explicit-opt-in rule requires auto-trigger to be "
-                "blocked so /council becomes the primary entry point"
+                f"{role}'s MECE axis question '{phrase}' missing "
+                f"from SKILL.md — without it the role's dimension "
+                f"can silently drift"
             )
 
-    # 11b. SKILL.md description must point at the /council slash-command
-    #      entry so a user who lands on this skill knows the proper path.
-    if fm_match:
-        body = fm_match.group(1)
-        desc_match = re.search(r"description:\s*>?\s*\n((?:[ \t]+.+\n?)+)", body)
-        if desc_match:
-            raw = desc_match.group(1)
-            folded = " ".join(line.strip() for line in raw.splitlines() if line.strip())
-            if "/council" not in folded and "council" not in folded.lower():
-                failures.append(
-                    "SKILL.md description should reference '/council' or the "
-                    "council skill by name — it is the fallback for explicit "
-                    "invocation, so users must be able to identify it"
-                )
+    # ------------------------------------------------------------------
+    # D. The seven-turn shape (the live-turn contract)
+    # ------------------------------------------------------------------
 
-    # 12. VERDICT COMPLETENESS principle — the "never stop at sufficient"
-    #     standard the user set in feedback_standard_not_sufficient.md.
-    combined_lower = combined.lower()
-    if "stop only when sure" not in combined_lower:
+    # D1. "seven turns" or the numbered turn block must be declared.
+    if "seven turns" not in lower and "The seven turns" not in text:
         failures.append(
-            "VERDICT COMPLETENESS principle missing: phrase "
-            "'stop only when sure' not found in either entry point"
-        )
-    if "what would need to become true" not in combined_lower:
-        failures.append(
-            "VERDICT COMPLETENESS principle missing: phrase "
-            "'what would need to become true' not found in either entry point"
+            "The seven-turn shape is not declared in prose — the "
+            "live-turn contract must be named explicitly"
         )
 
-    # 13. Anti-pattern "3/5 roles converge, 2/5 inconclusive" must be
-    #     explicitly rejected as a status report, not a verdict.
-    if "3/5" not in combined or "status report" not in combined:
-        failures.append(
-            "Anti-pattern '3/5 converge, 2/5 inconclusive is a status "
-            "report, not a verdict' framing missing from entry points"
-        )
+    # D2. Each turn T1..T7 is labeled in the turn block.
+    for label in (
+        "T1  Read-back + Grounding",
+        "T2  Cartographer",
+        "T3  Analyst",
+        "T4  Adversary",
+        "T5  Scout",
+        "T6  Operator",
+        "T7  Verdict",
+    ):
+        if label not in text:
+            failures.append(
+                f"Turn label '{label}' missing from turn block — "
+                f"the seven-turn shape must be visible as a block"
+            )
 
-    # 14. GROUND phase — Hersteller + Community names must both appear.
-    if "Hersteller" not in combined:
-        failures.append(
-            "GROUND phase missing: 'Hersteller' (authoritative source) "
-            "not referenced in either entry point"
-        )
-    if "Community" not in combined:
-        failures.append(
-            "GROUND phase missing: 'Community' source not referenced "
-            "in either entry point"
-        )
-
-    # 15. GROUND-FIRST rigor duty.
-    if "GROUND-FIRST" not in combined:
-        failures.append(
-            "GROUND-FIRST rigor duty missing — principle must be "
-            "encoded as a named duty in an entry point"
-        )
-
-    # 16. Grounding section in the output template.
-    if "## Grounding" not in combined:
-        failures.append(
-            "'## Grounding' section missing from output template — "
-            "Hersteller + Community must be visible in every verdict"
-        )
-    if "Manufacturer (Hersteller)" not in combined:
-        failures.append(
-            "Output template must show 'Manufacturer (Hersteller)' "
-            "label so the source is explicit to the reader"
-        )
-
-    # 17. Sequence contract: T1..T8 turn ordering (pinned to commands/
-    #     council.md where the authoritative turn map lives after 0.5.0).
-    #     Accept the ordering in either file; the command file is primary,
-    #     the skill carries a copy for the web fallback.
-    for source_name, source_text in (("commands/council.md", cmd), ("SKILL.md", skill)):
-        turn_block = re.search(r"T1\s+ORIENT.*?T8\s+VERDICT", source_text, re.DOTALL)
-        if not turn_block:
-            continue
-        block = turn_block.group(0)
+    # D3. Turn ordering: T1..T7 appear in order.
+    turn_block_match = re.search(
+        r"T1\s+Read-back.*?T7\s+Verdict", text, re.DOTALL
+    )
+    if turn_block_match:
+        block = turn_block_match.group(0)
         expected_order = [
-            "T1  ORIENT",
-            "T2  GROUND",
-            "T3  CARTOGRAPHER",
-            "T4  ANALYST",
-            "T5  ADVERSARY",
-            "T6  SCOUT",
-            "T7  OPERATOR",
-            "T8  VERDICT",
+            "T1  Read-back",
+            "T2  Cartographer",
+            "T3  Analyst",
+            "T4  Adversary",
+            "T5  Scout",
+            "T6  Operator",
+            "T7  Verdict",
         ]
         positions = {label: block.find(label) for label in expected_order}
-        if any(p < 0 for p in positions.values()):
-            missing = [k for k, v in positions.items() if v < 0]
-            failures.append(
-                f"{source_name}: turn-ordering check failed — missing labels {missing}"
-            )
-        else:
+        if all(p >= 0 for p in positions.values()):
             ordered = sorted(positions.items(), key=lambda kv: kv[1])
             if [k for k, _ in ordered] != expected_order:
                 failures.append(
-                    f"{source_name}: turn ordering wrong — expected "
-                    f"{expected_order}, got {[k for k, _ in ordered]}. "
-                    f"GROUND (T2) must precede CARTOGRAPHER (T3)."
-                )
-        break  # only one file needs to carry a valid turn map
-    else:
-        failures.append(
-            "Turn block 'T1 ORIENT … T8 VERDICT' not found in either "
-            "SKILL.md or commands/council.md — the turn-gated structure "
-            "is not declared"
-        )
-
-    # 18. ENFORCEMENT, not just presence — GROUND-FIRST must be followed
-    #     by the binding sentence.
-    gf_idx = combined.find("GROUND-FIRST")
-    if gf_idx >= 0:
-        nearby = combined[gf_idx : gf_idx + 2000]
-        if "No role speaks before both" not in nearby:
-            failures.append(
-                "GROUND-FIRST named but its binding sentence 'No role "
-                "speaks before both the Hersteller position and the "
-                "Community position are on the table' is missing nearby"
-            )
-
-    # 19. MECE check must treat grounding as a publication gate.
-    if "blocks publication" not in combined:
-        failures.append(
-            "MECE grounding check must include 'blocks publication' "
-            "phrasing so the rule is a gate, not a status line"
-        )
-
-    # 20. phases.md must name 'T2 grounding block' as Cartographer input.
-    phases_path = SKILL_DIR / "references" / "phases.md"
-    if phases_path.exists():
-        phases_text = phases_path.read_text()
-        t3_match = re.search(
-            r"## T3 — CARTOGRAPHER.*?(?=## T4)", phases_text, re.DOTALL
-        )
-        if not t3_match:
-            failures.append(
-                "references/phases.md missing '## T3 — CARTOGRAPHER' "
-                "section — T3 structure cannot be verified"
-            )
-        else:
-            t3_block = t3_match.group(0)
-            if "T2 grounding block" not in t3_block and "T2 grounding" not in t3_block:
-                failures.append(
-                    "T3 CARTOGRAPHER must name 'T2 grounding block' as "
-                    "input — coupling to GROUND is not enforced in prose"
-                )
-    else:
-        failures.append("references/phases.md missing")
-
-    # --- Turn-gated contract assertions (0.4.8 baseline, live-extended) ----
-
-    # 21. Turn-gated deliberation section in an entry point.
-    if "Turn-gated deliberation" not in combined:
-        failures.append(
-            "Turn-gated deliberation section missing from both entry "
-            "points — the live-turn contract (one phase per message + "
-            "sentinel) is the structural backbone and must be named"
-        )
-
-    # 22. Sentinel format with exact marker string.
-    if "=== TURN <N>/<K> COMPLETE — <PHASE NAME> ===" not in combined:
-        failures.append(
-            "Sentinel format template '=== TURN <N>/<K> COMPLETE — "
-            "<PHASE NAME> ===' missing from both entry points — "
-            "without an exact format turn boundaries cannot be enforced"
-        )
-
-    # 23. Continuation tokens.
-    missing_tokens = contains_all(combined, ["NEXT", "REBUTTAL", "DEEPEN", "BRANCH", "ABORT"])
-    if missing_tokens:
-        failures.append(
-            f"Continuation tokens missing from entry points: {missing_tokens}"
-        )
-
-    # 24. Role turn micro-format components.
-    if "**Thesis (one sentence):**" not in combined:
-        failures.append(
-            "Role turn micro-format missing '**Thesis (one sentence):**' "
-            "marker — without it, a role turn can drift without a position"
-        )
-    if "**Cross-reference" not in combined:
-        failures.append(
-            "Role turn micro-format missing '**Cross-reference' marker "
-            "— cross-reference is how turns compound"
-        )
-    if "**Dissent" not in combined:
-        failures.append(
-            "Role turn micro-format missing '**Dissent' marker — "
-            "silent agreement is indistinguishable from not listening"
-        )
-    if "**Resolvable?**" not in combined:
-        failures.append(
-            "Role turn micro-format missing '**Resolvable?**' marker "
-            "— abstention discipline applies per turn"
-        )
-
-    # 25. Chairman citation rule and T8 citations section.
-    if "Chairman citation rule" not in combined and "## Citations" not in combined:
-        failures.append(
-            "Chairman citation rule missing from entry points — the "
-            "Chairman's job is to listen, visible only through citation"
-        )
-    if "## Citations" not in combined:
-        failures.append(
-            "T8 VERDICT output template missing '## Citations' section"
-        )
-
-    # 26. GROUND turn must require visible tool calls.
-    if "visible tool" not in combined.lower() and "WebSearch" not in combined:
-        failures.append(
-            "GROUND turn tool-call requirement missing — the user "
-            "must see the grounding was performed, not asserted"
-        )
-
-    # 27. Turn counts declared: FULL (8 turns), QUICK (3 turns).
-    if "FULL (8 turns)" not in combined:
-        failures.append(
-            "FULL turn count '(8 turns)' missing — the turn plan "
-            "must be announced so K is fixed at T1"
-        )
-    if "QUICK (3 turns)" not in combined:
-        failures.append(
-            "QUICK turn count '(3 turns)' missing — the compressed "
-            "live-turn plan must be declared"
-        )
-
-    # 28. NO-DOWNGRADE for K.
-    if "K does not change" not in combined and "K is fixed" not in combined:
-        failures.append(
-            "NO-DOWNGRADE-for-K rule missing — silent turn-count "
-            "reduction mid-run is a documented failure mode that "
-            "must be ruled out"
-        )
-
-    # 29. references/turns.md must exist and carry worked examples.
-    turns_md = SKILL_DIR / "references" / "turns.md"
-    if not turns_md.exists():
-        failures.append("references/turns.md missing — the live-turn contract reference")
-    else:
-        turns_text = turns_md.read_text()
-        if "## Worked example — FULL run skeleton" not in turns_text:
-            failures.append(
-                "references/turns.md missing FULL-run worked example "
-                "— concrete turn-by-turn skeleton is how readers "
-                "internalise the contract"
-            )
-        if "## Worked example — QUICK run skeleton" not in turns_text:
-            failures.append(
-                "references/turns.md missing QUICK-run worked example"
-            )
-        if "#21672" not in turns_text:
-            failures.append(
-                "references/turns.md should name Claude Code issue "
-                "#21672 — the documented multi-turn-skill failure mode "
-                "this contract defends against"
-            )
-
-    # 30. Anti-pattern 'Two phases in one assistant message'.
-    if "Two phases in one assistant message" not in combined:
-        failures.append(
-            "Anti-pattern 'Two phases in one assistant message' "
-            "missing — the #21672 collapse pattern must be named"
-        )
-
-    # 31. Turn header format defined.
-    if "## Turn <N>/<K> — <PHASE NAME>" not in combined:
-        failures.append(
-            "Turn header template '## Turn <N>/<K> — <PHASE NAME>' "
-            "missing — the paired header + sentinel bracket each turn"
-        )
-
-    # 32. phases.md must be turn-numbered.
-    if phases_path.exists():
-        pt = phases_path.read_text()
-        for label in (
-            "## T1 — ORIENT", "## T2 — GROUND",
-            "## T3 — CARTOGRAPHER", "## T4 — ANALYST",
-            "## T5 — ADVERSARY", "## T6 — SCOUT",
-            "## T7 — OPERATOR", "## T8 — VERDICT",
-        ):
-            if label not in pt:
-                failures.append(
-                    f"references/phases.md missing turn-numbered section "
-                    f"'{label}' — turn-gated shape requires T1..T8 labelling"
+                    f"Turn ordering wrong in the seven-turn block — "
+                    f"expected {expected_order}, got "
+                    f"{[k for k, _ in ordered]}"
                 )
 
-    # 33. Stale phase-numbering invariant.
-    stale_labels = ["Phase 0", "Phase 1", "Phase 2", "Phase 3", "Phase 4"]
-    scope = [SKILL_MD, COMMAND_MD] + sorted((SKILL_DIR / "references").glob("*.md"))
-    for md_path in scope:
-        if not md_path.exists():
+    # D4. One turn per assistant message — the core live-turn rule.
+    if "One turn = one assistant message" not in text:
+        failures.append(
+            "'One turn = one assistant message' rule missing — "
+            "the live-turn seam is the point of this skill"
+        )
+
+    # ------------------------------------------------------------------
+    # E. Advisor-voice register (0.5.4) — no header, no menu
+    # ------------------------------------------------------------------
+
+    # E1. The advisor-voice section that forbids turn headers must exist.
+    #     Post-0.5.4 the role self-identifies inside the first sentence
+    #     of its prose; a heading like `## Cartographer · 2/7` is
+    #     explicitly forbidden. The old requirement (template declared)
+    #     was inverted.
+    if "The voice of a turn" not in text:
+        failures.append(
+            "'## The voice of a turn — no header, no menu' section "
+            "missing — this is the 0.5.4 advisor-voice contract that "
+            "replaces the old turn-header template"
+        )
+    if "identifies itself inside the first sentence" not in text and \
+       "identifies itself in the first sentence" not in text:
+        failures.append(
+            "Rule 'the role identifies itself in the first sentence' "
+            "missing — without it the opening-header ceremony can creep "
+            "back as a template"
+        )
+
+    # E2. Em-dash steering menu is explicitly an anti-pattern.
+    if "Steering-menu under any turn except T1" not in text and \
+       "Steering menu under any turn except T1" not in text:
+        failures.append(
+            "Anti-pattern 'Steering-menu under any turn except T1's "
+            "close' missing — the em-dash handoff sentinel was removed "
+            "in 0.5.4 and must be named as forbidden so it can't creep "
+            "back"
+        )
+
+    # E3. The compressed verdict turn is declared for sharp questions.
+    if "## Scope — the compressed verdict turn" not in text and \
+       "compressed verdict turn" not in lower:
+        failures.append(
+            "'Scope — the compressed verdict turn' section missing — "
+            "the downward-triage shape for narrow questions is part of "
+            "the 0.5.4 contract (skill shrinks the question but never "
+            "simplifies it)"
+        )
+    if "shrink the question" not in lower and \
+       "shrink but never simplify" not in lower:
+        failures.append(
+            "Scope-reduction rationale ('shrink the question but never "
+            "simplify it' / 'shrink but never simplify') missing — "
+            "without it the compressed turn devolves into a speed button"
+        )
+
+    # E4. The old sentinel block (=== TURN N/K COMPLETE ===) must be
+    #     explicitly named as an anti-pattern so it cannot creep back.
+    if "=== TURN" in text and "anti-pattern" not in lower and "Anti-pattern" not in text:
+        failures.append(
+            "Sentinel block '=== TURN ... ===' appears in SKILL.md "
+            "outside the anti-pattern context — it must be forbidden, "
+            "not demonstrated"
+        )
+
+    # ------------------------------------------------------------------
+    # F. Grounding discipline (Hersteller + Community + Divergence)
+    # ------------------------------------------------------------------
+
+    if "Hersteller" not in text:
+        failures.append(
+            "GROUND discipline missing: 'Hersteller' (authoritative "
+            "source) not referenced in SKILL.md"
+        )
+    if "Community" not in text:
+        failures.append(
+            "GROUND discipline missing: 'Community' source not "
+            "referenced in SKILL.md"
+        )
+    if "Divergence" not in text:
+        failures.append(
+            "GROUND discipline missing: 'Divergence' slot not "
+            "declared — a one-line divergence-or-alignment statement "
+            "is how Hersteller/Community become a first-class finding"
+        )
+
+    # F1. No role speaks before grounding — the binding rule.
+    if "No role speaks before the grounding" not in text:
+        failures.append(
+            "GROUND-FIRST binding rule missing: 'No role speaks "
+            "before the grounding is on the table' must appear "
+            "verbatim so the rule cannot decay to a header with no body"
+        )
+
+    # F2. Visible tool calls required when web access is available.
+    if "visible" not in lower or ("WebSearch" not in text and "WebFetch" not in text):
+        failures.append(
+            "GROUND requirement for visible tool calls (WebSearch / "
+            "WebFetch) missing — narrated search without the call in "
+            "the transcript is a contract violation and must be named"
+        )
+
+    # ------------------------------------------------------------------
+    # G. Cross-role engagement + dissent discipline
+    # ------------------------------------------------------------------
+
+    # G1. Cross-role engagement requirement: every role from T3 onward
+    #     must engage with a prior role by name. The rule stays, the
+    #     label "Cross-reference (Pflicht):" is gone.
+    if "T3 onward" not in text and "from T3 onward" not in text:
+        failures.append(
+            "Cross-role engagement obligation ('from T3 onward') "
+            "missing — without it, the Council collapses into five "
+            "parallel essays"
+        )
+    # Normalise whitespace so the rule still matches when the line
+    # wraps inside a paragraph.
+    flat = re.sub(r"\s+", " ", text)
+    if "engage with at least one prior role by name" not in flat:
+        failures.append(
+            "Cross-role engagement rule must state 'engage with at "
+            "least one prior role by name' so it is load-bearing prose, "
+            "not a paraphrase"
+        )
+
+    # G2. CHAIRMAN-VETO — the once-per-role deepen mechanism for silent
+    #     concurrence or under-production.
+    if "CHAIRMAN-VETO" not in text:
+        failures.append(
+            "CHAIRMAN-VETO mechanism missing — the once-per-role "
+            "deepen mechanism is how silent concurrence / under-"
+            "production gets corrected without ballooning the run"
+        )
+
+    # ------------------------------------------------------------------
+    # H. Adaptive Verdict (T7) — the core user requirement for this rewrite
+    # ------------------------------------------------------------------
+
+    if "adaptive" not in lower:
+        failures.append(
+            "Adaptive Verdict principle missing: the Verdict must be "
+            "explicitly described as 'adaptive' / 'scales to the "
+            "complexity of the question' — this is the non-negotiable "
+            "output-shape requirement from the user"
+        )
+    if "matches the complexity" not in text:
+        failures.append(
+            "Adaptive Verdict rule must state that the verdict "
+            "'matches the complexity' of the question — otherwise the "
+            "template-driven behaviour can creep back"
+        )
+
+    # H1. Three complexity regimes are named.
+    for regime_phrase, label in [
+        ("Narrow question", "narrow"),
+        ("Broad question", "broad"),
+        ("Roles could not converge", "inconclusive"),
+    ]:
+        if regime_phrase not in text:
+            failures.append(
+                f"Adaptive Verdict missing the {label!r} regime "
+                f"('{regime_phrase}') — each complexity regime must "
+                f"be named so the Chairman knows which shape to pick"
+            )
+
+    # H2. Verdict anti-patterns: no restated grounding block, no bulleted
+    #     citations, no MECE checklist block, no new findings under the
+    #     Chairman's voice.
+    for phrase, label in [
+        ("bulleted Citations section", "bulleted Citations section"),
+        ("MECE-Prüfung checklist as a visible block", "MECE checklist block"),
+        ("New findings under the Chairman", "new findings under Chairman"),
+    ]:
+        if phrase not in text:
+            failures.append(
+                f"Verdict anti-pattern '{label}' missing — the "
+                f"Chairman's output shape needs explicit anti-patterns "
+                f"to prevent ceremony creep-back"
+            )
+
+    # ------------------------------------------------------------------
+    # I. Core principle: 'Reicht' is not a verdict
+    # ------------------------------------------------------------------
+
+    if "stop only when sure" not in lower:
+        failures.append(
+            "Core principle missing: phrase 'stop only when sure' "
+            "not found in SKILL.md"
+        )
+    if "what would need to become true" not in lower:
+        failures.append(
+            "Core principle missing: phrase 'what would need to "
+            "become true' not found in SKILL.md"
+        )
+    if '"Reicht" is not a verdict' not in text and "'Reicht' is not a verdict" not in text:
+        failures.append(
+            "Core principle ''Reicht' is not a verdict' missing "
+            "verbatim — the user's feedback memory explicitly "
+            "anchors this phrasing"
+        )
+
+    # I1. Anti-pattern: 3/5 converge is a status report, not a verdict.
+    if "3/5" not in text or "status report" not in text:
+        failures.append(
+            "Anti-pattern '3/5 roles converge, 2/5 inconclusive is a "
+            "status report, not a verdict' framing missing from SKILL.md"
+        )
+
+    # ------------------------------------------------------------------
+    # J. Steering vocabulary + persistence
+    # ------------------------------------------------------------------
+
+    # J1. Steering tokens are named (German-first, as the skill uses).
+    for token in ("weiter", "widersprich", "vertiefe", "abzweig", "stopp"):
+        if token not in text:
+            failures.append(
+                f"Steering token '{token}' missing from SKILL.md — "
+                f"the user-facing vocabulary must be on the record"
+            )
+    # J2. Steering introduced once, in T1 — explicit rule.
+    if "introduced once" not in text and "introduced once, in T1" not in text:
+        failures.append(
+            "Steering vocabulary rule 'introduced once, in T1' missing "
+            "— otherwise the closing line swells into a token zoo"
+        )
+
+    # J3. Persistence to COUNCIL.md is declared.
+    if "COUNCIL.md" not in text:
+        failures.append("COUNCIL.md persistence file not documented")
+    if "## Persistence" not in text:
+        failures.append(
+            "'## Persistence' section missing — the persistence-"
+            "payoff contract must be declared"
+        )
+
+    # ------------------------------------------------------------------
+    # K. Anti-patterns are declared as a block (not just scattered)
+    # ------------------------------------------------------------------
+
+    if "## Anti-patterns" not in text:
+        failures.append(
+            "'## Anti-patterns' section missing — anti-patterns must "
+            "be gathered in one readable block so a role can scan them "
+            "before posting a turn"
+        )
+
+    # Specifically name the old ceremony as forbidden so a future edit
+    # cannot quietly reintroduce it.
+    for phrase, what in [
+        ("**Thesis", "labeled **Thesis:** block"),
+        ("**Cross-reference (Pflicht):**", "labeled **Cross-reference (Pflicht):** block"),
+        ("**Dissent (Pflicht):**", "labeled **Dissent (Pflicht):** block"),
+        ("**Resolvable?**", "labeled **Resolvable?** block"),
+        ("=== TURN N/K COMPLETE ===", "sentinel block"),
+    ]:
+        if phrase not in text:
+            failures.append(
+                f"Anti-pattern must explicitly forbid the {what} — "
+                f"old-ceremony label not named, so it can creep back"
+            )
+
+    # 0.5.4 advisor-voice additions — the three new anti-patterns
+    # protect the three changes made in this version from silent
+    # regression.
+    for phrase, what in [
+        ("Turn header with position counter", "turn header with position counter (## Cartographer · 2/7)"),
+        ("Seven turns for a clearly narrow question", "seven turns for a clearly narrow question"),
+    ]:
+        if phrase not in text:
+            failures.append(
+                f"0.5.4 anti-pattern must explicitly forbid '{what}' — "
+                f"without the named rule the old packaging can creep back"
+            )
+
+    # ------------------------------------------------------------------
+    # L. Stopping criteria
+    # ------------------------------------------------------------------
+
+    if "## Stopping criteria" not in text:
+        failures.append(
+            "'## Stopping criteria' section missing — the three legal "
+            "terminators (recommendation / explicit abstention / user "
+            "stop) must be declared"
+        )
+
+    # ------------------------------------------------------------------
+    # M. References — only roles.md remains; no stale pointers
+    # ------------------------------------------------------------------
+
+    roles_md = HERE.parent / "references" / "roles.md"
+    if not roles_md.exists():
+        failures.append("references/roles.md missing")
+
+    for stale_ref in ("phases.md", "turns.md", "ground.md", "persistence.md"):
+        # These four references were deleted in the streamlining. SKILL.md
+        # must not point at them.
+        if stale_ref in text:
+            failures.append(
+                f"SKILL.md points to deleted reference "
+                f"'references/{stale_ref}' — stale pointer must be "
+                f"removed"
+            )
+        # And the file itself must indeed be gone.
+        if (HERE.parent / "references" / stale_ref).exists():
+            failures.append(
+                f"references/{stale_ref} still present on disk — "
+                f"should have been deleted in the streamlining"
+            )
+
+    # ------------------------------------------------------------------
+    # N. Old-ceremony legacy tokens must not sit silently in SKILL.md body
+    #     outside the anti-patterns section
+    # ------------------------------------------------------------------
+
+    # Scan for legacy mode labels used as LIVE labels — not as negations
+    # or quoted anti-pattern examples. A live label looks like
+    # "CODE-MODE (filesystem access)" or "In QUICK mode, we …".
+    # Negations like "no QUICK/FULL/AUDIT mode zoo" and quoted examples
+    # like `"…CODE-MODE · Tiefe: FULL"` are legitimate — they *describe*
+    # the removed machinery without reinstating it.
+    for m in re.finditer(r"\b(CODE-MODE|DOC-MODE|CHAT-MODE)\b", text):
+        window = text[max(0, m.start() - 30): m.end() + 30]
+        # Skip if it's inside a quoted anti-pattern example.
+        if '"' in window and (window.count('"') % 2 == 1 or "Modus:" in window):
             continue
-        body = md_path.read_text()
-        for stale in stale_labels:
-            for m in re.finditer(re.escape(stale), body):
-                window = body[max(0, m.start() - 40): m.end() + 40].lower()
-                if any(tag in window for tag in ("old", "legacy", "previous", "pre-0.4.8")):
-                    continue
-                try:
-                    rel = md_path.relative_to(PLUGIN_ROOT)
-                except ValueError:
-                    rel = md_path.name
-                failures.append(
-                    f"Stale phase label '{stale}' found in {rel} — "
-                    f"post-0.4.8 the convention is T1..T8"
-                )
-                break
-
-    # --- 0.5.0 progressive-disclosure architecture assertions --------------
-
-    # 34. commands/council.md exists and is not a stub.
-    #     (existence was checked at load; here we check substance.)
-    if len(cmd) < 2000:
+        # Skip if it's a meta-reference to the old machinery.
+        if any(
+            tag in window.lower()
+            for tag in ("no ", "anti-pattern", "removed", "old", "legacy", "no mode", "mode zoo")
+        ):
+            continue
+        # Skip if it's inside the anti-pattern section.
+        if "## Anti-patterns" in text and m.start() > text.find("## Anti-patterns"):
+            continue
         failures.append(
-            f"commands/council.md is too short ({len(cmd)} chars) — "
-            "the slash-command entry must carry the turn-gated contract "
-            "inline so a standard run does not require reading references"
+            f"Legacy mode label '{m.group(0)}' used as a live label "
+            f"in SKILL.md (context: ...{window.strip()}...) — the mode "
+            f"zoo was removed in the streamlining and must not creep "
+            f"back as a live reference"
         )
 
-    # 35. commands/council.md declares itself self-sufficient for a
-    #     standard run (so Claude doesn't pre-load all references).
-    if "self-sufficient" not in cmd and "load on demand" not in cmd.lower():
-        failures.append(
-            "commands/council.md should declare the progressive-disclosure "
-            "intent (e.g. 'self-sufficient for a standard run' / "
-            "'load on demand') — without this, Claude may eagerly read "
-            "all references and lose the 0.5.0 token-reduction gain"
-        )
-
-    # 36. SKILL.md (web fallback) points to the command file as primary.
-    #     Either by /council reference or by explicit file pointer.
-    if "/council" not in skill and "commands/council.md" not in skill:
-        failures.append(
-            "SKILL.md does not point to the primary slash-command entry "
-            "('/council' or 'commands/council.md') — users invoking the "
-            "skill directly in Claude Code/Cowork should be redirected"
-        )
-
-    # 37. commands/council.md has its own YAML frontmatter with a
-    #     description (so the slash-command picker can render it).
-    cmd_fm = re.search(r"^---\s*\n(.*?)\n---\s*\n", cmd, re.DOTALL)
-    if not cmd_fm:
-        failures.append(
-            "commands/council.md missing YAML frontmatter — the slash "
-            "command picker requires it"
-        )
-    else:
-        if "description:" not in cmd_fm.group(1):
+    # Phase-numbered labels (Phase 0..4) from pre-0.4.8 must not appear
+    # anywhere in SKILL.md.
+    for stale in ("Phase 0", "Phase 1", "Phase 2", "Phase 3", "Phase 4"):
+        if stale in text:
             failures.append(
-                "commands/council.md frontmatter missing 'description:' "
-                "field — slash-command picker needs it"
+                f"Stale phase label '{stale}' in SKILL.md — post-"
+                f"streamlining convention is T1..T7 only"
             )
 
-    # 38. "No role speaks before both" enforcement binding sentence must
-    #     live near the GROUND-FIRST label (already covered by #18, but
-    #     confirmed here against the *command* file specifically to ensure
-    #     the primary entry carries the rule, not just the fallback).
-    gf_cmd = cmd.find("GROUND-FIRST")
-    if gf_cmd >= 0:
-        nearby_cmd = cmd[gf_cmd : gf_cmd + 2000]
-        if "No role speaks before both" not in nearby_cmd:
-            failures.append(
-                "commands/council.md: GROUND-FIRST label present but the "
-                "binding sentence is missing nearby — the primary entry "
-                "point must carry the rule, not just the label"
-            )
+    # ------------------------------------------------------------------
+    # Final
+    # ------------------------------------------------------------------
 
     if failures:
         print("FAIL council grader:")
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"PASS council grader — 38 contract checks")
+    print("PASS council grader — streamlined-contract checks")
     return 0
 
 

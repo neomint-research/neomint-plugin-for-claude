@@ -10,6 +10,354 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.5.9 — 2026-04-21
+
+Zwei kleine, aber register-kritische Edits am `council` skill nach
+User-Feedback: der Verdict wirkte in v0.5.8 "gecrampted" und war
+durch explizite Labels wie *Antwort:* / *Umsetzbarer Plan:*
+unnötig strukturiert.
+
+- **`council` skill — Verdict-Sektion verbietet explizit
+  Ordnungs-Labels.** Keine *Antwort:* / *Plan:* Headings, keine
+  *Umsetzbarer Plan*-Sub-Header, kein *TL;DR:*. Der Verdict fließt
+  als Prosa in die nummerierte Schritt-Liste; der Leser erkennt
+  Antwort und Plan an der Form, nicht an einem Label. Label-
+  Headings klingen nach Memo-Template und brechen das Advisor-
+  Register.
+- **`council` skill — Tone-Hinweis für den Verdict.** Prosa, nicht
+  Bullet-Stapel. Sätze dürfen atmen. Die 30 %-Turn-Length-Discipline
+  gilt **nicht** für T7: der Verdict ist das Produkt und darf den
+  Raum nehmen, den die Entscheidung verlangt. Konversationelles
+  Register, Kontraktionen, ein oder zwei verbindende Phrasen
+  zwischen Gedanken — statt Punkt-Punkt-Punkt.
+
+---
+
+## 0.5.8 — 2026-04-21
+
+Zwei Edits, direkt aus dem User-Feedback nach dem ersten v0.5.7-Review.
+
+- **`council` skill — T7 Verdict enthält verbindlich einen umsetzbaren
+  Plan im Chat.** Die bisherige "ein Fett-Satz als First Step"-Form ist
+  durch eine kurze, nummerierte Plan-Liste (zwei bis fünf Schritte,
+  imperativ, jeder mit konkretem Artefakt / Befehl / Datei) ersetzt.
+  Bei einer schmalen Frage zwei bis drei Schritte, bei einer breiten
+  bis zu fünf, bei nicht-konvergenten Rollen der kleinste Schritt, der
+  die fehlende Information produziert. Dokumentiert in *T7 — Verdict,
+  adaptive to the question*.
+- **`council` skill — neue Sektion *Turn length discipline — the 30 %
+  rule*.** Jede Turn-Ausgabe vor dem Verdict (T1–T6, inkl. Grounding,
+  Rerun, Deepen-Turn) zielt auf 30 % Token-Reduktion gegenüber dem
+  "bequemen" Draft. Was zu kürzen ist (Szene-Sätze, Stapel-Hedges,
+  Übergangsparagraphen, Soft-Opener, Paraphrasen-Klammern) und was
+  **nicht** (Rollen-Identifikation, spezifische Evidenz, Cross-Reference
+  wenn tragend, Grounding-Block in T1, Steering-Primer, **Verdict als
+  Ganzes**) ist explizit gelistet. Der Verdict darf so lang sein wie
+  die Entscheidung verlangt — das Budget gilt nur für das Scaffolding.
+- **governance skill (`neomint-plugin-entwicklung`) — neue Sektion
+  *Assertion schema — eval_metadata.json* in `references/plugin-eval.md`.**
+  Standardisiert die Assertion-Grammatik für Layer-2-Graders und
+  skill-creator-Iterations-Metadaten: `type` (regex_absent, regex_all,
+  regex_count, regex_any, file_exists), `target`, `rationale`,
+  `patterns` / `expected_min` / `expected_max`. Legacy-Aliase
+  (`check_type`, `target_file`) werden weiter toleriert. Dadurch wird
+  der Grader über alle Skills und Iterations wiederverwendbar, statt
+  pro Change ad-hoc gebaut zu werden. (Dies ist der Step-5e-
+  Selbst-Optimierungs-Vorschlag aus dem v0.5.7-Review, direkt in den
+  Standard integriert.)
+
+---
+
+## 0.5.7 — 2026-04-21
+
+Drei strukturell regressionsfreie Hebel zur Token-Kostenreduktion im
+`council` skill, aus dem Council-Verdict vom 2026-04-21 (siehe
+`COUNCIL.md`, Eintrag zur minimalen Token-Kosten-Senkung ohne messbare
+Qualitäts-Regression).
+
+- **`council` skill — neue Sektion *Persistence — GROUNDING-CACHE.md*.**
+  Dokumentiert einen persistenten Grounding-Substrat-Cache im Working-
+  Directory mit TTL-Regeln (30 Tage Hersteller-anchored, 7 Tage
+  Community-anchored, 1 Tag Fluss-Topics), Topic-Slug-Matching und
+  deutlicher Trennung zu `COUNCIL.md` (Entscheidungsgedächtnis) und zur
+  Model-Routing-Tabelle (Konfiguration). Schema: `## <date> — <slug>`
+  mit Hersteller/Community/Divergenz + Source-Hits.
+- **`council` skill — T1 Grounding prüft Cache vor WebSearch.** Im
+  Abschnitt *T1 — Read-back and Grounding, combined* ergänzt: vor jeder
+  WebSearch erst `GROUNDING-CACHE.md` am Working-Directory-Root prüfen.
+  Bei Cache-Hit Rendering im gleichen Hersteller/Community/Divergenz-
+  Block, abschließend mit einer Origin-Sentence („Grounding aus
+  GROUNDING-CACHE.md vom <datum>, unverändert gültig.") damit Nutzer
+  Fresh von Cached unterscheiden können.
+- **`council` skill — neue Sektion *Token economy — which hebel lives
+  where*.** Dokumentiert in drei Layern, welcher Hebel an welcher
+  Stelle wirkt: (a) im Skill selbst (Model Routing bereits implementiert,
+  GROUNDING-CACHE neu), (b) auf API/Plugin-Config-Ebene (Prompt Caching
+  der Skill-Prefix mit 90 % Reduktion bei Hit; Context Editing / Memory-
+  Tool mit 84 % Reduktion in langen Workflows), (c) auf Environment-
+  Ebene (Modellwahl-Caveats, wenn ein Caller kleinere Modelle erzwingt).
+
+Verifiziert über sechs Eval-Cases (zwei neue Delta-Tests für Cache-
+Miss-Write und Cache-Hit-Reuse, vier Regressionstests für die
+bestehende Shape/Voice-Disziplin), jeweils gegen v0.5.6-Baseline. Keine
+Shape-Regressionen, Cache-Mechanik in beiden Pfaden End-to-End
+funktionsfähig. Skill-Prefix wächst um ~9 %; die Einsparung kommt aus
+wiederholten Topic-Anfragen (Cache-Hits überspringen WebSearch
+vollständig) und aus Prompt Caching der Skill-Prefix über API-Calls
+hinweg.
+
+---
+
+## 0.5.6 — 2026-04-21
+
+Vier Edits am `council` skill, alle aus dem Council-Verdict vom
+2026-04-21 (siehe `COUNCIL.md`, Eintrag zur aggressiven Senkung von
+Chat-Footprint und Tokenkosten ohne Qualitätsregression) und der
+nachgelagerten Operationalisierung in
+`COUNCIL-OPTIMIZATION-NEXT-STEPS.md`.
+
+- **`council` skill — Grounding-Subagent (Haiku 4.5) für die WebSearch-
+  Mechanik in T1.** Im Abschnitt *T1 — Read-back and Grounding,
+  combined* dokumentiert, dass der mechanische Teil der Grounding-Suche
+  (WebSearch ausführen, Treffer in Titel/URL/Kernsatz komprimieren) in
+  einem Haiku-4.5-Subagent läuft, während die Einordnung in
+  Hersteller/Community/Divergenz im Opus-Haupt-Agent bleibt. Der
+  Subagent muss ein `model_used`-Feld zurückgeben, damit die Routing-
+  Disziplin auditierbar ist und nicht auf freiwilligem Eingeständnis
+  ruht. **Konditional aktiv — wird in v0.5.7 entfernt, falls die noch
+  ausstehende Caching-Messung (siehe NEXT-STEPS Schritt 1) ergibt, dass
+  Anthropic-Workspace-Caching den expliziten Subagent-Pfad überflüssig
+  macht.**
+- **`council` skill — verbindliche Modellwahl-Tabelle als neuer
+  Abschnitt *Model routing*.** Pro Turn-Slot ein Modell-Tier: T1 Read-
+  back Sonnet, T1 Grounding-Suche Haiku, T1 Grounding-Einordnung Opus,
+  T2 Cartographer/T3 Analyst/T6 Operator Sonnet (strukturell, mit
+  Korrektiv danach), T4 Adversary/T5 Scout/T7 Verdict Opus
+  (divergentes Denken bzw. Synthese, ohne nachgelagertes Korrektiv).
+  Die Begründungs-Spalte ist tragend, nicht dekorativ — sie macht das
+  Routing-Prinzip lesbar: Korrektiv vorhanden → Sonnet reicht; kein
+  Korrektiv → Opus.
+- **`council` skill — Komplexitäts-Probe vor T2 (Niche-Domain-Probe).**
+  Eine einzelne interne Chairman-Frage vor dem Cartographer-Turn:
+  *"Fällt diese Entscheidung in ein Feld, in dem Expertenwissen einer
+  schmalen Community die Antwort trägt — Medizin, Recht, regulierte
+  Standards, seltene technische Nischen?"* Bei *ja* werden
+  Cartographer, Analyst und Operator für diesen Lauf von Sonnet auf
+  Opus gehoben. Asymmetrisches Risiko: Kosten eines falschen *nein* ist
+  stille Qualitätsregression, Kosten eines falschen *ja* ist eine
+  modeste Token-Mehrausgabe. Die Probe lässt den Grounding-Subagent
+  bewusst auf Haiku — die "Nische" ist eine Eigenschaft der
+  Fragestellung, nicht der Rechercheausführung; das Domänen-Gewicht
+  trägt der Einordnungs-Schritt, der ohnehin schon auf Opus ist.
+- **`council` skill — `COUNCIL.md` als Lauf-Entlaster, nicht als
+  Chat-Inhalt.** Im Abschnitt *Persistence — COUNCIL.md* die Lese-
+  Regel verschärft: T1 liest die Datei wie bisher, *zitiert* aber
+  jeden vorherigen Verdict im sichtbaren Output nur noch einzeilig
+  (Datum + Zwei-bis-vier-Wort-Frage + operative Empfehlung als ein
+  Satz). Der vollständige Verdict-Text bleibt auf Platte; Cartographer
+  und nachfolgende Rollen lesen Details bei Bedarf direkt aus der
+  Datei, statt sie aus dem Chat-Kontext zu rekonstruieren. Trennt das
+  *live*-Substrat (Chat) sauber vom *persistenten* Substrat (Datei)
+  und schützt das Token-Budget gegen Vorlauf-Inflation.
+
+---
+
+## 0.5.5 — 2026-04-21
+
+- **`council` skill — externe Sharp-Heuristik ersetzt Selbstbeurteilung
+  im Shape-Entscheid.** Der Trigger, ob ein Lauf komprimiert (ein Turn)
+  oder sieben-turn läuft, hing in 0.5.4 an einer Selbstbeurteilung des
+  Modells nach dem Read-back ("wenn der Read-back nichts Substanzielles
+  hinzufügt, komprimiere"). Unter Read-back-Bias findet das Modell
+  fast immer Substanz und kippt systematisch zur teuren Sieben-Turn-
+  Form — eine self-fulfilling Prüfung, die ein eigener Council-Lauf
+  aufgedeckt hat. Die Entscheidung wandert jetzt auf drei *messbare
+  Signale an der Eingabe*, geprüft vor jedem Read-back: (1) Frage
+  unter 30 Wörter, (2) frei von Hedging-Modalverben (*sollte, könnte,
+  vielleicht* / *should, could, might*), (3) zwei oder mehr explizit
+  benannte Optionen. Alle drei müssen feuern für den komprimierten
+  Shape — sonst Sieben-Turn-Default. Die vier Substanz-Bedingungen aus
+  *Scope — the compressed verdict turn* bleiben als nachgelagerte
+  Validierung; der Trigger-Entscheid läuft jetzt auf Input-
+  Eigenschaften, nicht auf Selbstwahrnehmung.
+- **`council` skill — didaktische Voice-Disziplin für alle Rollen und
+  das Verdict.** Ein neuer Abschnitt *The voice of an advisor —
+  didactic weight* formalisiert, was erfahrene Berater tun: jede
+  Aussage trägt *Was, Warum, und die verworfene Alternative mit
+  Grund* als fließenden Gedanken — nicht als Aufzählung, nicht als
+  Pro/Contra-Block, nicht als separate "Alternativen betrachtet"-
+  Sektion. Der Nutzer, der Grundverständnis mitbringt aber Tiefe
+  nicht selbst bewerten kann, bekommt damit die Mitdenk-Spur, die
+  formal korrekte aber bare Empfehlungen unterschlagen. Die Regel
+  gilt für alle fünf Rollen und für das Verdict, in beiden Shapes;
+  im komprimierten Shape wird die Disziplin dichter, nicht weicher,
+  weil jeder Satz didaktisches Gewicht trägt. Eingeführt nach einem
+  echten Eval-Lauf, in dem der alte Output zwar formal alle MECE-
+  Achsen abdeckte, sich aber wie "abgehandelt" las statt wie
+  "beraten".
+
+---
+
+## 0.5.4 — 2026-04-21
+
+- **`council` skill — advisor-voice register.** Three changes landed
+  as a coherent fix, closing a register gap the 0.5.2 streamlining
+  did not fully resolve. User feedback after a live run: *"meine
+  berater würden niemals so antworten"* — the skill still read like
+  a protocol, not like a circle of advisors. Concretely:
+  (1) **Turn headers removed.** `## Cartographer · 2/7`,
+  `## Analyst · 3/7`, etc. are gone. The role now identifies itself
+  inside the first sentence of its prose (*"Als Kartograph schaue
+  ich …"*, *"Ich bin der Analyst …"*). A heading above that sentence
+  was redundant structure that made the council sound like a process
+  instead of a group of people.
+  (2) **Steering menu removed from every turn.** The em-dash
+  sentinel *"— Cartographer fertig. Weiter: Analyst · oder widersprich
+  · vertiefe · stopp"* was posted under every turn as if the user
+  forgot the vocabulary every three minutes. Now the steering primer
+  appears exactly once, as prose, at the end of T1 — then the user
+  is trusted to remember. A turn ends where the advisor's thought
+  ends, full stop.
+  (3) **Compressed verdict turn added for sharp questions.** New
+  `## Scope — the compressed verdict turn` section: when the question
+  arrives narrow, context is already on the table, and Hersteller +
+  Community align, the skill runs *one* message (brief grounding,
+  five MECE angles in prose named by role, verdict sentence, first
+  step) instead of seven. Scope reduction is legitimate when the
+  rigor is preserved — the core principle says *shrink the question
+  but never simplify it*. Seven turns for a one-dimensional decision
+  is ceremony, not deliberation. Upward triage (ambiguous question
+  → one diagnostic turn) stays unchanged; now there is downward
+  triage too.
+- **Anti-pattern section extended** with the three new forbidden
+  shapes: turn header with position counter, steering-menu under any
+  turn except T1's close, seven turns for a clearly narrow question.
+  The Layer 2 grader now asserts each of these by name so the 0.5.2
+  class of drift — disciplines preserved, register reintroduced —
+  can't recur silently.
+- **Skill-creator iteration loop ran to closure.** Four evals (sharp
+  Postgres question, broad auth-extraction question, mid-run
+  steering, ambiguous-diagnostic). 0.5.4 draft scored 27/27 (100%)
+  against structural assertions targeting the three changes; 0.5.3
+  baseline scored 16/27 (59%) — exactly at the anti-patterns the
+  refactor removed. Iteration report and per-run transcripts in
+  `skills/council/evals/`.
+- **Governance delta.** Layer 2 grader (`scripts/grade.py`) rewritten
+  for the new contract: asserts `## The voice of a turn — no header,
+  no menu`, the compressed-verdict section, the advisor-voice rule
+  (*role identifies itself in the first sentence*), and the three
+  new anti-patterns. Assertions that required the old turn-header
+  template and em-dash handoff template were inverted — they now
+  assert those shapes are *forbidden*, not required.
+
+---
+
+## 0.5.3 — 2026-04-21
+
+- **Agent-binding versioning rule — explicit in both the governance
+  skill and the README plugin standard.** The rule `major` and `minor`
+  only on explicit user instruction was already documented, but was
+  stated in voice-neutral form ("incremented only on explicit user
+  instruction") and not sharp enough to prevent an agent from
+  unilaterally proposing a minor bump when a refactor felt large.
+  Added a binding agent-rule block in both places: an agent may only
+  ever bump `fix`; if a change subjectively warrants more, deliver the
+  fix bump and *ask* — never the other direction. Semantic judgment
+  belongs to the user; mechanical increment belongs to the agent.
+  Codified after the agent proposed 0.6.0 for the pending council
+  advisor-voice refactor; the user corrected the mistake and anchored
+  the rule so it cannot recur.
+
+---
+
+## 0.5.2 — 2026-04-21
+
+- **`council` skill — radical streamlining.** The skill was
+  overengineered: labeled ceremony blocks (`**Thesis:**`,
+  `**Cross-reference (Pflicht):**`, `**Dissent (Pflicht):**`,
+  `**Resolvable?**`), the QUICK/FULL/AUDIT/DIAGNOSTIC mode zoo, and
+  sentinel blocks (`=== TURN N/K COMPLETE ===`) made runs hard to
+  read and made the skill look more like a form than a
+  deliberation. All three were removed. The disciplines they
+  enforced — turn-gating, grounding, cross-role engagement, dissent,
+  Chairman synthesis, adaptive verdict — remain, now carried by
+  prose rather than labels. `SKILL.md` shrank from 721 → ~390 lines;
+  four of five reference files (`phases.md`, `turns.md`, `ground.md`,
+  `persistence.md`) were consolidated into `SKILL.md` body or
+  dropped, leaving only `references/roles.md`. The seven-turn shape
+  is now: T1 Read-back + Grounding, T2 Cartographer, T3 Analyst,
+  T4 Adversary, T5 Scout, T6 Operator, T7 Verdict. Each turn opens
+  with a single header line (`## Cartographer  ·  2/7`) and closes
+  with a single em-dash handoff line (`— Cartographer fertig.
+  Weiter: Analyst · oder *widersprich* · *vertiefe <punkt>* ·
+  *stopp*`). The Verdict is adaptive: narrow question → one
+  paragraph; broad question → two paragraphs (operative +
+  management); inconclusive → paragraph naming the gap and what
+  would resolve it. Core principle ("*Reicht* is not a verdict")
+  is preserved verbatim.
+- **`commands/council.md` — slimmed from 344 → ~50 lines.** The
+  command file now delegates the full contract to `SKILL.md` rather
+  than duplicating phase mechanics, sentinel formats, and turn
+  micro-formats inline. This ends the double-maintenance burden
+  where every ceremony rule had to be edited in both files.
+- **`skills/council/evals/evals.json` — rewritten for the new
+  contract.** The obsolete `mode_expected` and `context_expected`
+  fields were dropped (modes are gone). Four evals retained
+  (code-auth-extraction, chat-slo-circuit-breaker, doc-policy-gap-audit,
+  ambiguous-diagnostic-turn); each `expected_output` now names the
+  streamlined turn shape, the adaptive-verdict regime that fits,
+  and the anti-patterns that must not appear.
+- **`skills/council/scripts/grade.py` — rewritten as
+  discipline-protector rather than ceremony-locker.** The prior
+  grader had 33 assertions that locked the old ceremony into the
+  contract (sentinel strings, labeled blocks, mode tokens, five
+  reference files, `Mode: DIAGNOSTIC` header). All 33 would have
+  failed against the streamlined `SKILL.md`, even though the skill
+  is strictly better. The new grader protects the load-bearing
+  disciplines — five MECE roles with their axis questions, seven-turn
+  ordering, one-turn-per-message rule, GROUND-FIRST with its binding
+  sentence verbatim, cross-role engagement rule, CHAIRMAN-VETO,
+  adaptive Verdict with its three regimes named, "*Reicht* is not
+  a verdict" principle, steering vocabulary — and explicitly rejects
+  the old ceremony by requiring the anti-pattern section to forbid
+  each removed label by name. The old ceremony cannot creep back
+  silently.
+- **Layer 1 — `commands/` added to `ROOT_WHITELIST`.** The 0.5.0
+  release ratified `commands/<name>.md` as the canonical entry
+  point for explicit-invocation skills but forgot to update
+  `plugin-check.py`'s root whitelist, so every Layer 1 run from
+  0.5.0 onward flagged `commands` as a stray folder. Fixed.
+- **Layer 1 — ghost-skill filter ignores YAML frontmatter field
+  names.** `disable-model-invocation`, `argument-hint`, and
+  `allowed-tools` are YAML frontmatter keys that the README
+  legitimately quotes when documenting the invocation-model
+  standard. The ghost-skill heuristic was matching them as
+  suspected skill names (hyphenated, lowercase, > 3 chars). Added
+  them to the exclusion set.
+- **README — role order corrected in council description.** The
+  short description in the "What's inside" section had the first
+  two roles inverted ("Analyst, Cartographer, …"), conflicting with
+  the canonical T2→T6 order defined in `SKILL.md`, `CHANGELOG.md`,
+  and the grader. Restored to "Cartographer, Analyst, Adversary,
+  Scout, Operator". Pure WORDING fix, caught by Layer 3.
+- **`skills/council/SKILL.md` — canonical heading restored.** The
+  references section was titled `## References`, but
+  `SKILL_TEMPLATE.md` and the plugin standard specify
+  `## Additional references`. Renamed to match. A Layer 1 assertion
+  was added to lock this: if a skill has a non-empty `references/`
+  directory, the canonical heading must be present and the legacy
+  `## References` form must not appear. Caught as a STRUCTURE
+  finding by Layer 3 and promoted to Layer 1 per the Step 5c rule.
+- **Why this is a patch bump (0.5.1 → 0.5.2), not minor.** The
+  council streamlining is large in line count but is strictly a
+  refinement: same seven-role MECE backbone, same grounding
+  discipline, same turn-gating, same "*Reicht* is not a verdict"
+  principle. No new capability, no new skill, no archive-layout
+  change. The Layer 1 fixes close real gaps that the standard
+  already ratified. Patch is the right call.
+
+---
+
 ## 0.5.1 — 2026-04-21
 
 - **`SKILL_TEMPLATE.md` — "Invocation model" decision up front.** The

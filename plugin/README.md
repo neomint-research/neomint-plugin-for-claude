@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.5.1` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.5.9` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -22,11 +22,11 @@ Three skills, each opt-in, each scoped to one job.
 
 ### `council`
 
-Context-aware judgment skill with five MECE roles (Analyst, Cartographer, Adversary, Scout, Operator) and a Chairman synthesis. Used when you want a qualified opinion on a plan, design, or draft rather than a blank-slate rewrite.
+Context-aware judgment skill with five MECE roles (Cartographer, Analyst, Adversary, Scout, Operator) and a Chairman synthesis. Used when you want a qualified opinion on a plan, design, or draft rather than a blank-slate rewrite.
 
-It runs as a **turn-gated live deliberation**: one phase per assistant message (T1 Orient · T2 **Ground** (Hersteller + Community, before any role speaks) · T3 Cartographer · T4 Analyst · T5 Adversary · T6 Scout · T7 Operator · T8 Verdict in FULL mode; three-turn compressed form in QUICK mode). Each turn ends in a visible sentinel so you can follow along, rebut a specific role, deepen any point, branch to a new premise, or abort cleanly — without restarting. The verdict produces a two-track output: an operative track with references and a management track with one recommendation. Every role turn from T4 onward must cite a prior role turn by direct quote, and the Chairman's verdict must cite each role — so you can see who heard whom. Follow-up runs are cheaper because `COUNCIL.md` persistence remembers prior framing.
+It runs as a **live, turn-gated deliberation**: one turn per assistant message (T1 Read-back + Grounding · T2 Cartographer · T3 Analyst · T4 Adversary · T5 Scout · T6 Operator · T7 Verdict). The role identifies itself inside the first sentence of its prose — no turn header, no position counter. A turn ends where the advisor's thought ends. You can steer between any two roles using `weiter`, `widersprich`, `vertiefe`, `abzweig`, `stopp`, or free-text interpreted charitably; the vocabulary is introduced once, as prose, at the end of T1, and then you are trusted to remember. The Grounding in T1 puts Hersteller (authoritative source) and Community (practitioner consensus) on the table before any role speaks, so the run starts from a shared, named substrate rather than reasoning in a vacuum. From T3 onward every role must engage with a prior role by name — agreement with reason, extension with reason, or substantive dissent — so the five turns compound instead of drifting into parallel essays. When the question arrives sharp (narrow binary or enumerated choice, context already on the table, Hersteller and Community aligned), the skill runs one compressed verdict turn instead of seven — brief grounding, five MECE angles in prose named by role, verdict sentence, first step. Scope reduction is legitimate when rigor is preserved: the skill shrinks the question, but never simplifies it. The Verdict is adaptive: narrow question → one paragraph; broad question → two paragraphs (operative + management); inconclusive → a paragraph naming the gap and what would resolve it. Follow-up runs are cheaper because `COUNCIL.md` persistence remembers prior framing.
 
-**Primary entry is `/council`.** In Claude Code and Cowork the Council is invoked explicitly by typing `/council` — not by auto-matching on decision language. The slash-command file at [`commands/council.md`](commands/council.md) carries the full turn-gated contract inline; a standard run completes without reading any reference file. The skill's own [`skills/council/SKILL.md`](skills/council/SKILL.md) is the fallback for Claude AI (Web), where slash commands are unavailable — its `disable-model-invocation: true` frontmatter blocks auto-triggering so the user remains in charge of when the Council fires. Detailed references (`roles.md`, `ground.md`, `persistence.md`, `turns.md`, `phases.md`) are loaded **on demand only**, keeping the per-run token floor roughly 80 % below the 0.4.x shape.
+**Primary entry is `/council`.** In Claude Code and Cowork the Council is invoked explicitly by typing `/council` — not by auto-matching on decision language. The slash-command file at [`commands/council.md`](commands/council.md) delegates to the skill's contract, which lives in [`skills/council/SKILL.md`](skills/council/SKILL.md). That SKILL.md is also the fallback for Claude AI (Web), where slash commands are unavailable — its `disable-model-invocation: true` frontmatter blocks auto-triggering so the user remains in charge of when the Council fires. One reference file is loaded on demand: [`references/roles.md`](skills/council/references/roles.md) carries the method, deliverable, failure modes, and abstention triggers per role. A standard run completes without reading it; it is pressure-check material for a role about to post its turn.
 
 ### `pdf-umbenennen`
 
@@ -107,6 +107,8 @@ Format: `major.minor.fix`.
 `minor` increments only on explicit user instruction.
 `fix` increments automatically for every change (even small ones).
 
+**Agent rule (binding):** an agent may only ever bump the `fix` level. Never unilaterally propose a minor or major bump — not because a refactor feels large, not because user-facing behavior changes visibly, not because many files are touched. If a change subjectively warrants more than a fix, deliver the fix bump and ask the user whether they want to re-label it. The semantic judgment belongs to the user; the mechanical increment belongs to the agent.
+
 Every change must bump the appropriate version field in `plugin.json`, add a top entry to `CHANGELOG.md`, and update the version reference in this README.
 
 ---
@@ -117,7 +119,7 @@ The toolkit is maintained through a three-layer iteration loop, described in ful
 
 **Layer 1** — structural assertions on every file (bundled `scripts/plugin-check.py`: plugin.json integrity, version consistency, SKILL.md block completeness, shared-file presence, reference coverage, root-whitelist enforcement, shipping-archive cleanliness).
 
-**Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding its own contract. The council grader currently runs 33 checks.
+**Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding its own contract. The council grader currently runs 44 checks protecting the seven-turn shape, the five MECE role axes, the GROUND-FIRST discipline with its binding sentence, the adaptive Verdict's three complexity regimes, the `"Reicht" is not a verdict` principle, and the anti-pattern enumeration that forbids the removed ceremony by name.
 
 **Layer 3** — an unprimed audit subagent with no context from the change under review. It reads the delta and reports SHIP / HOLD with named defects. Blind spots the assertion set didn't know to look for surface here; the next iteration either fixes them or promotes them into a new Layer 1 or Layer 2 assertion.
 

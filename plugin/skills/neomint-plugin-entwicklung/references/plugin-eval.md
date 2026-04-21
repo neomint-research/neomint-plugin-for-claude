@@ -134,6 +134,64 @@ When a plugin change surfaces a gap the script didn't catch:
 
 ---
 
+## Assertion schema — eval_metadata.json
+
+Per-skill graders (Layer 2) and ad-hoc structural checks written during
+a skill-creator iteration must produce an `eval_metadata.json` per run
+using the schema below. The schema is deliberately narrow: one grammar,
+one grader, no dialects.
+
+### Top-level fields
+
+```json
+{
+  "eval_id": 0,
+  "eval_name": "slug",
+  "variant": "with_skill" | "old_skill" | "without_skill" | "new_skill",
+  "status": "ready_for_grading",
+  "shape_under_test": "short-name",
+  "note": "optional — context the grader cannot derive",
+  "assertions": [ ... ]
+}
+```
+
+`variant` names are free-form but must match the subdirectory name
+under `eval-N/` (the aggregator discovers config names dynamically).
+
+### Assertion types
+
+Every assertion has an `id`, a `type`, a `target` (file path relative
+to the run dir, e.g. `outputs/transcript.md`), and a `rationale`
+(one sentence explaining what failure the check is designed to catch).
+
+| `type` | Required fields | Semantics |
+|---|---|---|
+| `regex_absent` | `pattern` | Fails if the pattern matches anywhere in `target`. Use for forbidden shapes. |
+| `regex_all` | `patterns` (list) | Fails if any one pattern is missing. Use for required landmarks. |
+| `regex_count` | `pattern`, `expected_min` and/or `expected_max` | Fails if match count is outside the band. Use for "at least once" or "exactly once" constraints. |
+| `regex_any` | `patterns` (list) | Fails if none of the patterns match. Use when there are multiple acceptable vocabularies. |
+| `file_exists` | (none) | Passes if `target` exists. Use to prove a side effect happened (file was written). |
+
+All regex checks are case-insensitive. Use `(a|b|c)` alternation to
+accept vocabulary variation instead of forcing one specific wording.
+
+### Legacy aliases (tolerated)
+
+Older metadata may use `check_type` instead of `type` and
+`target_file` instead of `target`. The grader accepts both, but new
+metadata must use the canonical field names. A `check_type` of
+`"regex"` is treated as `regex_any` with a single pattern.
+
+### Why this matters
+
+Without a common schema, each iteration invents its own grammar and
+graders become one-off scripts. With this schema, one grader script
+runs across all skills and all iterations, and the assertion set
+becomes a reusable library — which is what makes the loop sustainable
+instead of one-shot work.
+
+---
+
 ## What Layer 3 cannot be replaced by
 
 A structural check asserts a known truth. An audit subagent asserts an

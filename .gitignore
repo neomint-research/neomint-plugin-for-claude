@@ -27,8 +27,19 @@ node_modules/
 evals/reports/
 evals/cache/
 
-# Shipping artefact — the canonical *.plugin file lives at the root
+# Shipping artefact — the canonical *.plugin file lives inside plugin/
 # and IS committed so users can install directly from a checkout.
-# Transient build zips elsewhere should not be committed.
+# Transient build zips elsewhere (versioned artefacts, test bundles)
+# should not be committed.
 /tmp/
 /pluginbuild/
+/neomint-toolkit-*.plugin
+
+# Council runtime + iteration state. COUNCIL.md is the skill's
+# per-workspace memory file; the review/eval HTMLs and iteration
+# summary MDs are transient development output. None of these
+# belong in git.
+/COUNCIL.md
+/COUNCIL-*.md
+/council-*.html
+/GROUNDING-CACHE.md
