@@ -11,7 +11,7 @@ labels: bug
 
 ## Which skill / component
 
-<!-- e.g. council, pdf-umbenennen, plugin-check.py, a specific grader. -->
+<!-- e.g. council, rename-pdf, update-plugin, plugin-check.py, a specific grader. -->
 
 ## Plugin version
 

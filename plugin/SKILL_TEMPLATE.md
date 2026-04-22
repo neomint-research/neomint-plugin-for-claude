@@ -17,36 +17,47 @@ Short description of the skill's goal.
 
 ## Invocation model — decide this first
 
-Before writing anything else in this SKILL.md, decide whether the skill is
-**auto-triggering** or **explicit-invocation**. The decision drives everything
+Before writing anything else in this SKILL.md, decide which of the **three
+legal patterns** this skill follows. The decision drives everything
 downstream (frontmatter flag, file layout, pairing obligations).
 
-Decision rule: **"Would firing this without asking surprise the user?"**
-- If **no** (the skill is lightweight, scoped, and safe to fire whenever its
-  triggers appear) → auto-triggering is the default. Do nothing special.
-- If **yes** (the skill runs a long deliberation, spends many turns, writes
-  files, or produces output the user should opt into) → explicit-invocation
-  is mandatory. Follow the pairing contract below.
+**Pattern 1 — Auto-only** (default for lightweight, scoped tasks)
+No `disable-model-invocation` flag. No paired command file. The model
+decides when to fire based on the description's trigger signals. Correct
+when the skill is safe to run whenever the signals appear and there is no
+meaningful argument a user would pass explicitly.
 
-For explicit-invocation skills, the pairing is **bidirectional and mandatory**:
+**Pattern 2 — Command-only** (for heavy, multi-turn, opt-in workflows)
+`disable-model-invocation: true` in frontmatter. Paired `commands/<name>.md`
+file that carries the full contract inline so `/name` runs without reading
+references. Correct when auto-firing would race the user's intent — long
+deliberations (`/council`), governance pipelines (`/update-plugin`), or
+anything the user should explicitly opt into.
 
-- Create `../../commands/<skill-name>.md` at the plugin root. That file carries
-  the full contract inline so a `/skill-name` run loads no reference files.
-- Uncomment `disable-model-invocation: true` in this skill's frontmatter.
-  Without the flag, Claude would auto-fire on trigger words and race the
-  user's explicit `/skill-name` invocation.
-- This SKILL.md becomes the **Claude AI (Web) fallback** — carry enough of
-  the contract inline that a standard run works without reading references.
+**Pattern 3 — Auto + Command** (added in 0.6.0)
+No `disable-model-invocation` flag. Paired `commands/<name>.md` file.
+The skill auto-fires on clear intent signals AND the user can invoke it
+explicitly with arguments. Correct when both paths are legitimate — e.g.
+`rename-pdf`: the model can trigger it on "clean up my scans", and the user
+can also call `/rename-pdf ~/inbox` with a folder argument to skip the
+inventory step. The auto-path covers the discovery case; the command-path
+covers the direct case.
 
-Layer 1 (`scripts/plugin-check.py`) enforces the pairing in both directions
-and will fail the build if one half of it is missing.
+Decision rule in one sentence: **"Does this skill need a user-facing
+command entry?"** If yes → either Pattern 2 (heavy, so auto-firing would be
+wrong) or Pattern 3 (both paths are fine). If no → Pattern 1.
 
-Auto-triggering skills do NOT set `disable-model-invocation` and do NOT get a
-paired command file. That is correct, not a deficiency.
+Layer 1 (`scripts/plugin-check.py`) enforces:
+- Every `commands/<name>.md` needs a paired `skills/<name>/SKILL.md` (Pattern
+  2 or 3).
+- Every non-auto skill (Pattern 2) needs its paired command, otherwise the
+  skill is unreachable in Claude Code / Cowork.
 
 This decision was introduced in 0.5.1 after `council` had to be refactored
-from auto-trigger to explicit-invocation post-hoc — prevent that cost by
-making the call up front.
+from auto-trigger to explicit-invocation post-hoc. The third pattern was
+added in 0.6.0 when `rename-pdf` needed both an auto-trigger surface (so
+users can say "rename my scans" in plain language) and a command surface
+(so power users can pass a folder path as argument).
 
 ---
 

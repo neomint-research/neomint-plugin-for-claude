@@ -20,13 +20,13 @@ neomint-plugin-for-claude/
 └── plugin/                   ← the shipping plugin (everything below this is
     ├── .claude-plugin/         the plugin itself — see plugin/README.md for
     ├── skills/                 install instructions, skill docs, and the
-    ├── CHANGELOG.md            plugin's own standards)
+    ├── commands/               plugin's own standards)
+    ├── CHANGELOG.md
     ├── CONTRIBUTING.md
     ├── README.md
     ├── SKILL_TEMPLATE.md
     ├── LICENSE
-    ├── SECURITY.md
-    └── neomint-toolkit.plugin  ← the built, installable artefact
+    └── SECURITY.md
 ```
 
 `LICENSE` and `SECURITY.md` are duplicated on purpose: the copies at the repo root exist for GitHub's discovery conventions, the copies inside `plugin/` ship inside the `.plugin` bundle so a user who only has the installed plugin still has the license text and security-contact information (Apache 2.0 §4 requires the license text to travel with the work).
@@ -38,10 +38,10 @@ neomint-plugin-for-claude/
 See [`plugin/README.md`](plugin/README.md) for install instructions, the three skills and their triggers, the plugin's internal standards, and the build procedure. A short summary:
 
 - **`council`** — turn-gated live deliberation with five MECE roles and a Chairman synthesis, built to answer decision-language prompts ("should we…", "check my reasoning", "what could go wrong") with a qualified opinion rather than a blank-slate rewrite.
-- **`pdf-umbenennen`** — renames scanned PDFs by content (date · sender · subject) in parallel batches.
-- **`neomint-plugin-entwicklung`** — the governance skill that gates every change to the plugin itself, enforcing pre-research, the official `skill-creator` workflow, and the three-layer iteration loop below.
+- **`rename-pdf`** — renames scanned PDFs by content (date · sender · subject) in parallel batches. Auto-triggers on the right signals and also runs via `/rename-pdf [folder]`.
+- **`update-plugin`** — the governance skill that gates every change to the plugin itself, enforcing pre-research, the official `skill-creator` workflow, and the three-layer iteration loop below. Runs via `/update-plugin`.
 
-The installable artefact is [`plugin/neomint-toolkit.plugin`](plugin/neomint-toolkit.plugin). Current version is recorded in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and [`plugin/CHANGELOG.md`](plugin/CHANGELOG.md).
+The installable artefact is distributed as a `.plugin` archive on the project's GitHub Releases page — it is built per release and is not committed to the source tree. Current version is recorded in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json) and [`plugin/CHANGELOG.md`](plugin/CHANGELOG.md).
 
 ---
 
@@ -61,8 +61,8 @@ If no authoritative source exists for a question, that absence is stated as a fi
 
 Every change to the plugin passes three layers before it is considered complete:
 
-- **Layer 1** — structural assertions on the plugin root. Implemented deterministically in [`plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py`](plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py). Covers `plugin.json` integrity, version consistency with the CHANGELOG top entry, SKILL.md required blocks, shared-file presence, reference-doc coverage, root-whitelist enforcement, shipping-archive cleanliness, and consistency between documented build commands and the coded never-shipped design.
-- **Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding the skill's own contract. The council grader currently runs 33 checks.
+- **Layer 1** — structural assertions on the plugin root. Implemented deterministically in [`plugin/skills/update-plugin/scripts/plugin-check.py`](plugin/skills/update-plugin/scripts/plugin-check.py). Covers `plugin.json` integrity, version consistency with the CHANGELOG top entry, SKILL.md required blocks, shared-file presence, reference-doc coverage, root-whitelist enforcement, runtime-artefact sweep, the commands↔skills pairing in all three legal patterns, and consistency between documented build commands and the coded never-shipped design.
+- **Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding the skill's own contract. Counts drift as skills iterate; the binding number is always whatever the grader script actually asserts.
 - **Layer 3** — an unprimed audit subagent. It sees only the delta and reports `SHIP` or `HOLD` with named defects. Blind spots the assertion set didn't know to look for surface here; the next iteration either fixes them in place or promotes them into a new Layer 1 or Layer 2 assertion. Layer 3 is not in the CI, on purpose — it needs a reasoning model, not a deterministic check.
 
 The loop closes only when all three layers pass in a single complete pass. The CI at [`.github/workflows/plugin-check.yml`](.github/workflows/plugin-check.yml) runs Layers 1 and 2 on every push and PR to `main`.

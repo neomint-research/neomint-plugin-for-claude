@@ -47,6 +47,58 @@ for this skill is described below under "Procedure in Claude AI (Web)".
 
 ---
 
+## Workspace-and-artefact rule (binding, every step)
+
+> **Every runtime artefact lives in `/tmp/<plugin-name>-workspace/`.
+> Never in the plugin source tree. Never in the user's working folder
+> outside the plugin repo either.**
+
+This covers:
+
+- skill-creator iteration workspaces (eval runs, subagent transcripts,
+  snapshots of prior skill versions, eval-viewer HTML output, grading
+  reports)
+- plugin-check Layer 1 / Layer 2 JSON reports
+- Layer 3 subagent findings
+- intermediate zips, extracted source trees, build scratch
+- any other file that is not part of the plugin's source-of-truth
+
+Why this is a hard rule: plugins are installed read-only in Claude Code
+and Cowork. A skill that writes into its own source tree at runtime
+either (a) fails on installation because the tree is read-only, or
+(b) pollutes the developer's checkout with artefacts that end up
+committed by accident and shipped inside the next `.plugin` archive.
+Both failure modes have happened in this plugin before. The `/tmp`
+workspace is writable in every environment that can run the skill, and
+is automatically cleaned between sessions.
+
+The shipping `.plugin` archive itself is also a build artefact and
+belongs in `/tmp/<plugin-name>.plugin`. Distribution is via GitHub
+Releases (or equivalent) — never by committing the archive into the
+plugin repo. Layer 1 enforces: no `*.plugin`, no `*-workspace/`, no
+`skill-snapshot/` anywhere inside the plugin tree or the repo root.
+
+When the skill needs to write a workspace file, use:
+
+```
+/tmp/<plugin-name>-workspace/
+├── iteration-N/          ← skill-creator iteration N
+│   ├── eval-M/           ← one prompt evaluated
+│   │   ├── with_skill/   ← subagent run with the skill
+│   │   ├── without_skill/← baseline run
+│   │   └── grading.json  ← per-eval grading
+│   ├── benchmark.json    ← aggregated results for iteration
+│   └── eval-viewer.html  ← static review page
+├── skill-snapshot/       ← frozen copy of the prior skill version
+└── plugin-check/         ← Layer 1 / Layer 2 reports
+```
+
+`<plugin-name>` is the `name` field from `.claude-plugin/plugin.json` —
+deterministic, single source of truth, never derived from the folder
+name.
+
+---
+
 ## Procedure with file access (Claude Code & Cowork)
 
 This is the full plugin-update loop. Execute it in order, from Step 0 to
@@ -212,71 +264,113 @@ If deficiencies are found: correct before continuing.
 
 ### Step 4 — Repackage the plugin
 
-> **Build-artefact rule.** Every transient artefact produced during
-> packaging, grading, or evaluation — intermediate zips, extracted
-> source trees, grader report JSON, cache folders — is written under
-> `/tmp`. The plugin root holds only source files and the canonical
-> shipping `*.plugin` archive. The Layer 1 root-whitelist check
-> enforces this; treat any FAIL on "No stray files at plugin root" as
-> a blocker. Never add a new whitelist entry to silence it unless the
-> file genuinely belongs to the plugin source.
+The plugin source repo holds only source files. The shipping `.plugin`
+archive is **never** committed into the repo or copied into the user's
+workspace folder. It is built in `/tmp` and uploaded to a release host
+(GitHub Releases for this plugin) by the user.
 
-After every change, repackage the plugin. First locate the plugin root
-folder (it contains `.claude-plugin/plugin.json`) — either from
-conversation context or via:
+This was changed in the 0.6.0 cleanup: prior versions kept a "canonical
+shipping archive at the plugin root", which conflicted with the
+read-only-installation reality and made it impossible to enforce a
+clean repo without a special-case whitelist entry. The new contract is
+simpler and uniform: every artefact lives in `/tmp/<plugin-name>-workspace/`,
+the archive included.
+
+First locate the plugin root folder (it contains
+`.claude-plugin/plugin.json`) — either from conversation context or via:
 
 ```bash
 find /sessions /mnt -name "plugin.json" -path "*/.claude-plugin/*" 2>/dev/null | head -5
 ```
 
-**Build in `/tmp`, then copy into the workspace folder.** Writing the
-zip directly into a mounted workspace folder can fail to atomically
-replace an existing archive (the kernel rejects the in-place rename
-across the mount). Building in `/tmp` and then copying is both robust
-and clean.
-
 > **Zip from a clean copy, not from `/tmp` itself.** The recipe below
-> `cp -r`s the plugin root into `/tmp/<plugin-name>-src/` and then
-> `cd`s into *that* folder before zipping. Never run `cd /tmp && zip
-> -r ….plugin .` — zip would then include every sibling folder in
-> `/tmp` (snapshot dirs, other builds, grader workspaces) inside the
-> archive, and the user would receive an archive with mystery
-> top-level folders. This is not hypothetical: it happened in 0.4.4
-> and was caught manually in verification. The 0.4.5 Layer 1
-> assertion *Shipping archive contents are clean* catches it
-> automatically on the next pass — but getting it right the first
-> time is still the discipline. Also: before building, delete any
-> pre-existing `/tmp/<plugin-name>.plugin`; `zip -r` appends to an
-> existing archive rather than replacing it.
+> `cp -r`s the plugin root into `/tmp/<plugin-name>-workspace/src/`
+> and then `cd`s into *that* folder before zipping. Never run
+> `cd /tmp && zip -r ….plugin .` — zip would then include every
+> sibling folder in `/tmp` (snapshot dirs, other builds, grader
+> workspaces) inside the archive, and the user would receive an
+> archive with mystery top-level folders. Also: before building,
+> delete any pre-existing `/tmp/<plugin-name>-workspace/<plugin-name>.plugin`;
+> `zip -r` appends to an existing archive rather than replacing it.
 
 ```bash
-# Build outside the mount
-rm -rf /tmp/<plugin-name>-src && \
-cp -r /path/to/plugin-root /tmp/<plugin-name>-src && \
-rm -rf /tmp/<plugin-name>-src/.mcpb-cache /tmp/<plugin-name>-src/*.plugin && \
-cd /tmp/<plugin-name>-src && \
-zip -r /tmp/<plugin-name>.plugin . \
+WORK=/tmp/<plugin-name>-workspace
+mkdir -p "$WORK"
+rm -rf "$WORK/src" "$WORK/<plugin-name>.plugin"
+cp -r /path/to/plugin-root "$WORK/src"
+# Defensive scrub — the source tree should already be clean, but if a
+# stray runtime artefact slipped in we drop it before zipping.
+rm -rf "$WORK/src/.mcpb-cache" \
+       "$WORK/src/"*.plugin \
+       "$WORK/src/"*-workspace \
+       "$WORK/src/skill-snapshot"
+cd "$WORK/src"
+zip -r "$WORK/<plugin-name>.plugin" . \
   -x "*.DS_Store" \
   -x "*/evals/*" \
-  -x "*.plugin"
+  -x "*.plugin" \
+  -x "*/__pycache__/*" \
+  -x "*.pyc"
 
 # Verify
-unzip -l /tmp/<plugin-name>.plugin | head -30
+unzip -l "$WORK/<plugin-name>.plugin" | head -30
 python3 -c "
 import zipfile, json
-z = zipfile.ZipFile('/tmp/<plugin-name>.plugin')
+z = zipfile.ZipFile('$WORK/<plugin-name>.plugin')
 json.loads(z.read('.claude-plugin/plugin.json'))
 print('plugin.json: valid JSON inside archive')
 "
-
-# Copy into the user's workspace folder
-cp /tmp/<plugin-name>.plugin /path/to/workspace-folder/<plugin-name>.plugin
 ```
 
 Replace `<plugin-name>` with the actual plugin name from
-`.claude-plugin/plugin.json`. Place the finished `.plugin` file in the
-workspace folder and offer it to the user for download via a
-`computer://` link.
+`.claude-plugin/plugin.json`. Offer the finished archive to the user
+via a `computer://` link pointing at `/tmp/<plugin-name>-workspace/<plugin-name>.plugin`,
+together with a one-line reminder that the next step is to upload the
+archive as the new GitHub Release asset. Do not copy the archive into
+the workspace folder.
+
+#### Delivery — `/tmp` first, `dist/` as documented fallback
+
+The standard delivery path is the `computer://` link into the `/tmp`
+workspace. If the user reports that the link will not open or the
+"Save As" dialog refuses the `/tmp` source — a known issue in Cowork
+where tmpfs paths are sometimes not routable through the file-browser
+"Save" flow — fall back to staging the archive in `dist/` at the repo
+root:
+
+```bash
+mkdir -p /path/to/repo/dist
+rm -f /path/to/repo/dist/*.plugin    # idempotent: drop any stale archive
+cp "$WORK/<plugin-name>.plugin" /path/to/repo/dist/
+```
+
+The `rm -f` before the `cp` matters because P7's archive-shape check
+(0.6.3) asserts that every `dist/*.plugin` matches the repo's current
+`plugin.json` version. If a prior release's archive is still in
+`dist/`, re-running the fallback step would leave both archives in
+place and Layer 1 would FAIL on version drift. The idempotent recipe
+keeps the `dist/` directory at exactly one archive — the current
+release candidate — so a re-run is safe.
+
+Then share a `computer://` link pointing at
+`/path/to/repo/dist/<plugin-name>.plugin`. Layer 1 explicitly
+allow-lists `dist/*.plugin` files; anything else under `dist/`
+(wrong extension, nested directory) is still a FAIL. `.gitignore`
+covers `*.plugin` repo-wide so the staging copy never lands in a
+commit. The `dist/` directory itself is not tracked — create it on
+demand (`mkdir -p /path/to/repo/dist`) only when the fallback is
+actually needed.
+
+`dist/` is a transition zone, not a permanent home. The archive's
+destination is the GitHub Release asset list; a file in `dist/` is a
+staging copy the user can open from Cowork's file browser *on the way
+to* uploading. After the release is cut, `dist/` is expected to be
+empty again. The `plugin-check.py --strict-release` flag (added in
+0.6.4) enforces this post-release invariant — invoke it manually
+after cutting a release, or wire it into CI on release-tag pushes.
+
+See `references/plugin-eval.md` "Delivery — /tmp first, dist/ as
+documented fallback" for the full rationale and the Layer 1 contract.
 
 ---
 
@@ -305,7 +399,10 @@ ghost skills), `_shared` files present, SKILL_TEMPLATE present, each
 SKILL.md has valid YAML frontmatter with name+description and
 references both `_shared/language.md` and `_shared/environments.md`,
 no mid-sentence truncation in any SKILL.md, every `references/X.md`
-reference resolves, no stray files at the plugin root (whitelist).
+reference resolves, no stray files at the plugin root (whitelist), and
+no runtime artefacts anywhere in the plugin tree or repo root
+(`*.plugin`, `*-workspace/`, `skill-snapshot/`, `eval-viewer-iter*.html`,
+`COUNCIL.md`, `iteration-workspace/`).
 
 Exit 0 means Layer 1 passes. Exit 1 means at least one assertion
 failed — fix it and re-run.
@@ -502,10 +599,18 @@ to `CHANGELOG.md` (newest on top), and update the version reference in
 Any deviation from this structure is a deficiency and must be
 corrected.
 
-The `commands/` directory is optional and relevant only for
-**explicit-invocation skills** — skills the user is expected to fire by
-name rather than have Claude auto-trigger on context. For such a skill
-the pairing is mandatory and bidirectional:
+A skill follows one of **three legal patterns**, and the `commands/`
+directory is relevant only for patterns 2 and 3.
+
+**Pattern 1 — Auto-only** (default for light, scoped skills). No
+`disable-model-invocation` flag in SKILL.md. No command file. Claude
+decides when to fire from the description's trigger signals. Correct
+whenever firing-on-signal would not surprise the user and there is no
+meaningful argument the user would want to pass explicitly.
+
+**Pattern 2 — Command-only** (heavy, multi-turn, or opinionated skills —
+e.g. `/council`, `/update-plugin`). Pairing is mandatory and
+bidirectional:
 
 - `commands/<name>.md` is the primary entry in Claude Code and Cowork.
   It must carry the full contract inline so a standard run loads no
@@ -518,19 +623,33 @@ the pairing is mandatory and bidirectional:
   for the upstream issue references). The SKILL.md serves as the
   Claude AI (Web) fallback where slash commands are unavailable.
 
-Auto-triggering skills (the default — e.g. `rename-pdf` before its
-command was added) have no command file and neither flag; that is
-correct, not a deficiency. When deciding whether a new skill is
-auto-triggering or explicit-invocation, ask: "would firing this
-without asking surprise the user?" If yes, it is explicit-invocation
-and needs the pairing.
+**Pattern 3 — Auto + Command** (introduced in 0.6.0 with `rename-pdf`).
+The skill keeps its auto-trigger surface AND ships a companion command.
+No `disable-model-invocation` flag. Paired `commands/<name>.md` exists
+and carries the full contract for the command path. Use this when both
+entry points are legitimate — the auto path handles discovery ("could
+you clean up my scans?") and the command path handles direct argumented
+use (`/rename-pdf ~/inbox`).
 
-Layer 1 enforces the pairing in both directions — see
-`scripts/plugin-check.py`.
+Decision rule: ask **"does this skill need a command entry at all?"**
+- If no → Pattern 1.
+- If yes and auto-firing would race the user's intent (long deliberation,
+  opinionated workflow) → Pattern 2.
+- If yes and both paths are legitimate → Pattern 3.
 
-This pattern was introduced in 0.5.0 for the `council` skill; the
+Layer 1 enforces:
+- Every `commands/<name>.md` needs a paired `skills/<name>/SKILL.md`
+  (Pattern 2 or 3).
+- Every non-auto skill (Pattern 2) needs its paired command, otherwise
+  the skill is unreachable in Claude Code / Cowork.
+
+See `scripts/plugin-check.py`.
+
+Pattern 2 was introduced in 0.5.0 for the `council` skill; the
 `user-invocable: true` addition was introduced when this skill was
-renamed from `neomint-plugin-entwicklung` to `update-plugin`.
+renamed from `neomint-plugin-entwicklung` to `update-plugin`. Pattern 3
+was introduced in 0.6.0 alongside the `pdf-umbenennen` → `rename-pdf`
+rename.
 
 ---
 

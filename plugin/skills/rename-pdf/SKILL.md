@@ -1,19 +1,22 @@
 ---
-name: pdf-umbenennen
+name: rename-pdf
 description: >
   Renames PDF documents in a folder automatically based on their content — date, sender,
   and subject — following the convention yyyy-mm-dd_Sender_Subject-short.pdf. Use this
   skill whenever the user has a folder of PDFs with cryptic or auto-generated names
   (e.g. 2026-04-15.pdf, scan_001.pdf, IMG_003.pdf) and wants human-readable filenames.
-  Trigger signals: mention of scanner or scan folder (ScanSnap, Fujitsu, inbox, archive);
-  desire for content-based filenames ("by date and sender", "proper names", "self-explanatory",
-  "recognise without opening", "clean up folder"); or simply a folder of PDFs to rename.
-  Also trigger when the user does not say "rename" but clearly describes a folder of scans
-  with unreadable filenames. Do not use for: merging PDFs, converting, full-text search,
+  Trigger signals in either English or German: mention of a scanner or scan folder
+  (ScanSnap, Fujitsu, inbox, archive, Scan-Ordner); desire for content-based filenames
+  ("rename scans", "by date and sender", "proper names", "self-explanatory",
+  "recognise without opening", "clean up folder", "Scans umbenennen",
+  "ordentlich benennen", "nach Datum und Absender"); or simply a folder of PDFs to
+  rename. Also trigger when the user does not say "rename" but clearly describes a
+  folder of scans with unreadable filenames. Also runs when the user invokes
+  `/rename-pdf` explicitly. Do not use for: merging PDFs, converting, full-text search,
   or sequential numbering.
 ---
 
-# PDF Rename — Automatically name scanned documents
+# Rename PDF — Automatically name scanned documents
 
 This skill renames all PDF files in a folder based on their document content.
 The goal: an archive that explains itself — date, sender, and topic at a glance,

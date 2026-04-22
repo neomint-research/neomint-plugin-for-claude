@@ -7,7 +7,7 @@ labels: standard
 
 ## The rule today
 
-<!-- Quote the relevant section of README.md or skills/neomint-plugin-entwicklung/SKILL.md. -->
+<!-- Quote the relevant section of README.md or skills/update-plugin/SKILL.md. -->
 
 ## The problem
 

@@ -2,17 +2,17 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.5.10` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.6.7` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
 
 ## Install
 
-Download the latest `neomint-toolkit.plugin` file from the [`plugin/`](.) directory of the repository and install it the same way you install any local Claude plugin:
+Download the latest `neomint-toolkit.plugin` file from the project's [GitHub Releases](https://github.com/neomint/NeoMINT-plugin/releases) page — the archive is attached as a release asset, not committed to the source tree — and install it the same way you install any local Claude plugin:
 
 - **Claude Code / Cowork:** open the plugin from your file manager, or point your plugin tooling at the `.plugin` file.
-- **Building from source:** from inside this `plugin/` directory, run `rm -f neomint-toolkit.plugin && zip -r neomint-toolkit.plugin . -x '*.git*' -x '*.github/*' -x 'CONTRIBUTING.md' -x '*.DS_Store' -x '*/.mcpb-cache/*' -x '*/evals/*' -x '*.plugin'`. `LICENSE` and `SECURITY.md` ship inside the bundle so installed users see the license terms and security policy without needing the repository. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full build procedure.
+- **Building from source (for local testing):** from inside this `plugin/` directory, run `rm -f neomint-toolkit.plugin && zip -r neomint-toolkit.plugin . -x '*.git*' -x '*.github/*' -x 'CONTRIBUTING.md' -x '*.DS_Store' -x '*/.mcpb-cache/*' -x '*/evals/*' -x '*.plugin'`. `LICENSE` and `SECURITY.md` ship inside the bundle so installed users see the license terms and security policy without needing the repository. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full build and release procedure.
 
 ---
 
@@ -28,17 +28,13 @@ It runs as a **live, turn-gated deliberation**: one turn per assistant message (
 
 **Primary entry is `/council`.** In Claude Code and Cowork the Council is invoked explicitly by typing `/council` — not by auto-matching on decision language. The slash-command file at [`commands/council.md`](commands/council.md) delegates to the skill's contract, which lives in [`skills/council/SKILL.md`](skills/council/SKILL.md). That SKILL.md is also the fallback for Claude AI (Web), where slash commands are unavailable — its `disable-model-invocation: true` frontmatter blocks auto-triggering so the user remains in charge of when the Council fires. One reference file is loaded on demand: [`references/roles.md`](skills/council/references/roles.md) carries the method, deliverable, failure modes, and abstention triggers per role. A standard run completes without reading it; it is pressure-check material for a role about to post its turn.
 
-### `pdf-umbenennen`
+### `rename-pdf`
 
-Renames scanned PDF documents based on their content — date, sender, subject — following `yyyy-mm-dd_Sender_Subject-short.pdf`. Reads files in parallel batches. Triggers on phrases like "rename scans", "clean up ScanSnap folder", "name files by date and sender".
+Renames scanned PDF documents based on their content — date, sender, subject — following `yyyy-mm-dd_Sender_Subject-short.pdf`. Reads files in parallel batches. Triggers on phrases like "rename scans", "clean up ScanSnap folder", "name files by date and sender" in either English or German. Also runs via the `/rename-pdf [folder]` command for direct argumented use — an example of the **Auto + Command** pattern (see *Invocation patterns* below). Previously shipped as pdf-umbenennen (German name); renamed in 0.6.0 so the skill's identifier follows Anthropic's English-by-default convention.
 
 ### `update-plugin`
 
-Explicit-invocation governance skill for updating any Claude plugin — adding a new skill, modifying an existing skill, updating plugin standards, or repackaging. Enforces pre-research, the official `skill-creator` workflow for every content change, the three-layer iteration loop, and repackaging after every change. Proposes improvements to the standard or to itself after every run. Primary entry is `/update-plugin` (see [`commands/update-plugin.md`](commands/update-plugin.md)); the description-driven trigger is the fallback for Claude AI (Web). This is the generalised successor to `neomint-plugin-entwicklung` — both coexist for now so in-flight references stay valid; new plugin work should prefer `update-plugin`.
-
-### `neomint-plugin-entwicklung`
-
-The original governance skill, NeoMINT-specific. Same mechanics as `update-plugin` but phrased around this toolkit's standards directly. Kept alongside `update-plugin` during the transition; expect it to be removed in a future release once all references are migrated.
+Explicit-invocation governance skill for updating any Claude plugin — adding a new skill, modifying an existing skill, updating plugin standards, or repackaging. Enforces pre-research, the official `skill-creator` workflow for every content change, the three-layer iteration loop, and repackaging after every change. Proposes improvements to the standard or to itself after every run. Primary entry is `/update-plugin` (see [`commands/update-plugin.md`](commands/update-plugin.md)); the description-driven trigger is the fallback for Claude AI (Web). `update-plugin` is the generalised successor to the earlier NeoMINT-specific governance skill, removed in 0.6.0.
 
 ---
 
@@ -66,19 +62,37 @@ neomint-toolkit/
         └── references/      ← optional, for progressive disclosure
 ```
 
-Any deviation from this structure is a deficiency and must be corrected. The
-`commands/` directory is optional and only relevant for **explicit-invocation
-skills** — skills the user is expected to fire by name rather than have Claude
-auto-trigger on context. For such a skill the contract is bidirectional:
-`commands/<name>.md` carries the full contract inline (so a standard run loads
-no reference files), and its paired `skills/<name>/SKILL.md` must set
-`disable-model-invocation: true` in its frontmatter to prevent auto-triggering
-and also serves as the Claude AI (Web) fallback where slash commands are
-unavailable. Auto-triggering skills (e.g. `pdf-umbenennen`, `neomint-plugin-entwicklung`)
-have no command file and no `disable-model-invocation` flag — that is correct and
-intentional, not a deficiency. Layer 1 enforces the pairing: any `commands/X.md`
-without a matching `disable-model-invocation` skill, and any skill with that flag
-without a matching `commands/<name>.md`, is a violation.
+Any deviation from this structure is a deficiency and must be corrected.
+
+**Three legal invocation patterns.** A skill can follow any one of three
+shapes, and Layer 1 enforces the choice.
+
+1. **Auto-only** (default, e.g. `council`'s predecessor before the
+   command-only refactor, and most small skills). No `disable-model-invocation`
+   flag. No command file. The model decides when to fire from the
+   description's trigger signals. Correct for lightweight, scoped tasks
+   that are safe to fire on signal.
+
+2. **Command-only** (heavy workflows that must not race user intent, e.g.
+   `/council`, `/update-plugin`). `disable-model-invocation: true` in the
+   skill's frontmatter. Paired `commands/<name>.md` carries the full
+   contract inline so `/name` loads no reference files; the SKILL.md
+   serves as the Claude AI (Web) fallback. Auto-firing is disabled because
+   the skill is opinionated enough that the user must opt in.
+
+3. **Auto + Command** (added in 0.6.0 with `rename-pdf`). No
+   `disable-model-invocation` flag. Paired `commands/<name>.md`. The
+   skill auto-fires on clear intent signals AND accepts an explicit
+   `/name [argument]` invocation. Correct when both paths are
+   legitimate — the auto path covers discovery ("can you clean up my
+   scans?") and the command path covers direct use with arguments
+   (`/rename-pdf ~/inbox`).
+
+Layer 1 enforces the pairing:
+- Every `commands/<name>.md` needs a paired `skills/<name>/SKILL.md` (pattern
+  2 or 3).
+- Every non-auto skill (pattern 2) needs its paired command, otherwise the
+  skill is unreachable in Claude Code / Cowork.
 
 ### Required blocks in every SKILL.md
 
@@ -102,7 +116,7 @@ Every judgment-producing step in the toolkit — authoring a new skill, grading 
 
 ### Build artefacts
 
-Transient artefacts — intermediate zips, extracted source trees, grader reports, eval outputs, cache folders — are written to `/tmp` (or an equivalent workspace outside the plugin tree), never to the plugin root. Only the canonical shipping artefact (`*.plugin`) is permitted alongside the plugin root. The Layer 1 root-whitelist in `plugin-check.py` enforces this: anything new at the root must be either added to the whitelist (because it genuinely belongs to the plugin) or moved under `/tmp`. This rule exists because leftover build state was shipped inside the plugin in 0.3.x–0.4.0 — `.mcpb-cache/` and a stray `zimjorit` archive both slipped through until Layer 1 was added in 0.4.1.
+All runtime artefacts live in `/tmp/<plugin-name>-workspace/` — iteration outputs, grader reports, eval viewer HTML, extracted source trees, the shipping `.plugin` zip itself. Nothing gets written into the plugin source tree, and no `*.plugin` archive is permitted at the plugin root. Distribution is via GitHub Releases; the build pipeline uploads the archive from `/tmp/<plugin-name>-workspace/<plugin-name>.plugin`. Layer 1 enforces both halves: the root-whitelist rejects stray files at the plugin root, and a recursive sweep rejects runtime artefacts (`*.plugin`, `*-workspace/`, `skill-snapshot/`, `eval-viewer-iter*.html`, `COUNCIL.md`) anywhere in the plugin tree or the repo root. The rule exists because leftover build state was shipped inside the plugin in 0.3.x–0.4.0 (`.mcpb-cache/`, stray archives) and runtime artefacts silently accumulated in the source tree up to 0.5.x until the 0.6.0 cleanup made the contract uniform.
 
 ### Versioning
 
@@ -121,9 +135,9 @@ Every change must bump the appropriate version field in `plugin.json`, add a top
 
 The toolkit is maintained through a three-layer iteration loop, described in full in [`CONTRIBUTING.md`](CONTRIBUTING.md):
 
-**Layer 1** — structural assertions on every file (bundled `scripts/plugin-check.py`: plugin.json integrity, version consistency, SKILL.md block completeness, shared-file presence, reference coverage, root-whitelist enforcement, shipping-archive cleanliness).
+**Layer 1** — structural assertions on every file (bundled `scripts/plugin-check.py`: plugin.json integrity, version consistency, SKILL.md block completeness, shared-file presence, reference coverage, root-whitelist enforcement, runtime-artefact sweep across the entire repo, slash-command ⇔ skill pairing).
 
-**Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding its own contract. The council grader currently runs 44 checks protecting the seven-turn shape, the five MECE role axes, the GROUND-FIRST discipline with its binding sentence, the adaptive Verdict's three complexity regimes, the `"Reicht" is not a verdict` principle, and the anti-pattern enumeration that forbids the removed ceremony by name.
+**Layer 2** — per-skill graders. Each skill ships its own `scripts/grade.py` encoding its own contract. The council grader protects the seven-turn shape, the five MECE role axes, the GROUND-FIRST discipline with its binding sentence, the adaptive Verdict's three complexity regimes, the `"Reicht" is not a verdict` principle, and the anti-pattern enumeration that forbids the removed ceremony by name. Counts drift as skills iterate; the binding number is always whatever the grader script actually asserts.
 
 **Layer 3** — an unprimed audit subagent with no context from the change under review. It reads the delta and reports SHIP / HOLD with named defects. Blind spots the assertion set didn't know to look for surface here; the next iteration either fixes them or promotes them into a new Layer 1 or Layer 2 assertion.
 
@@ -147,29 +161,15 @@ Issues, pull requests, and pointed criticism are welcome — see [`CONTRIBUTING.
 
 ## Adding a new skill
 
-The process is enforced by the `neomint-plugin-entwicklung` skill. In summary:
+The process is enforced by the `update-plugin` skill (slash command `/update-plugin`). In summary:
 
 1. **Pre-research (mandatory).** Check Anthropic GitHub (`anthropics/skills`, `anthropics/claude-plugins-official`, `anthropics/claude-code`) and community sources for the current gold standard. Present a brief research summary before proceeding.
 2. **Clarify the goal.** New skill, modification, standard update, or repackage only?
-3. **Use the official skill-creator skill.** For every creation or content change of a skill, without exception. Direct edits to SKILL.md without skill-creator violate the plugin standard.
+3. **Use the official skill-creator skill.** For every creation or content change of a skill, without exception. Direct edits to SKILL.md without skill-creator violate the plugin standard. Run the full iteration loop to closure — propose tests, get user approval, run subagents in parallel, generate the eval-viewer, wait for explicit user review, improve, repeat.
 4. **Quality checks.** Run the 8-item checklist (pre-research, template compliance, language block, environment block, web fallback, description, no internal content, conventions).
-5. **Update metadata.** Bump version in `plugin.json`, add CHANGELOG entry, update README.
-6. **Three-layer iteration loop.** Layer 1 structural, Layer 2 per-skill grader, Layer 3 unprimed audit. The loop closes only when all three pass in one complete pass.
-7. **Repackage** into `.plugin` file and deliver.
-8. **Self-optimisation.** After every change: did Layer 3 surface something the assertion set missed? If so, a new Layer 1 assertion is expected. Propose improvements to the standard.
+5. **Update metadata.** Bump the `fix` field in `plugin.json`, add a CHANGELOG entry on top, update the version reference in this README.
+6. **Run the three-layer plugin loop.** Layer 1 (`scripts/plugin-check.py`), Layer 2 (per-skill graders auto-discovered), Layer 3 (unprimed audit subagent). The loop closes only when one complete pass has zero real failures across all three layers.
+7. **Repackage.** Build the `.plugin` archive in `/tmp/<plugin-name>-workspace/`, verify, and upload as a GitHub Release asset. Never commit the archive into the repo.
+8. **Self-optimisation.** Surface concrete proposals for improving the standard or the governance skill itself, and only implement them after the user agrees.
 
-See the `neomint-plugin-entwicklung` skill for the full procedure.
-
----
-
-## Security
-
-To report a security issue, see [`SECURITY.md`](SECURITY.md).
-
-## License
-
-Apache License 2.0 — see [`LICENSE`](LICENSE).
-
-## Author
-
-[NeoMINT GmbH](https://neomint.com)
+The full contract — including the workspace path rule, the agent-only-bumps-fix rule, and the slash-command/SKILL.md frontmatter pairing — lives in [`skills/update-plugin/SKILL.md`](skills/update-plugin/SKILL.md) and [`skills/update-plugin/references/plugin-eval.md`](skills/update-plugin/references/plugin-eval.md).

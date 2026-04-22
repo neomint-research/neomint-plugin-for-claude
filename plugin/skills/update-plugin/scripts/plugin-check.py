@@ -44,7 +44,26 @@ ROOT_WHITELIST = {
     ".gitignore",
     ".git",
 }
-# *.plugin archives at the root are tolerated; they are what we ship.
+# *.plugin archives are NEVER permitted at the plugin root.
+# Distribution is via GitHub Releases (or equivalent); the build
+# artefact lives in /tmp/<plugin-name>-workspace/. This was the policy
+# change in 0.6.0 — see references/plugin-eval.md "Workspace path".
+
+# Runtime artefacts that must never appear anywhere in the plugin tree
+# or in the repo root next to it. Iteration outputs (eval runs, snapshots,
+# eval-viewer HTML, plugin-check reports, council session logs) all live
+# in /tmp/<plugin-name>-workspace/.
+RUNTIME_ARTEFACT_BASENAMES = {
+    "COUNCIL.md",
+    "iteration-workspace",
+    "skill-snapshot",
+}
+RUNTIME_ARTEFACT_GLOBS = (
+    "*.plugin",
+    "*-workspace",
+    "eval-viewer-iter*.html",
+    "plugin-check-report.json",
+)
 
 # Per-skill subdirectories/files that may exist but are not shipped.
 # If the grading script lives at skills/<x>/scripts/grade.py, Layer 2 picks it up.
@@ -162,13 +181,26 @@ def _yaml_frontmatter(path: Path) -> dict | None:
     return fields
 
 
-def run_layer1(root: Path, rep: Report) -> None:
+def run_layer1(root: Path, rep: Report, strict_release: bool = False) -> None:
     # --- plugin.json ---
     plugin_json = root / ".claude-plugin" / "plugin.json"
     data = _read_json(plugin_json)
     rep.add("plugin.json exists", 1, plugin_json.exists(), str(plugin_json))
     rep.add("plugin.json valid JSON", 1, data is not None,
             "invalid or unreadable" if data is None else "parsed OK")
+    # Trailing newline — POSIX convention, not strictly JSON-required, but
+    # tools that diff/append/concatenate JSON files (and some editors)
+    # behave better when the file ends in \n. Promoted to Layer 1 in 0.6.2
+    # after plugin.json silently lost its trailing newline twice in a row
+    # during the 0.6.0/0.6.1 cycles — both times only caught by a manual
+    # `tail -c` after the fact. Trivial to enforce.
+    if plugin_json.exists():
+        try:
+            ends_lf = plugin_json.read_bytes().endswith(b"\n")
+        except Exception:
+            ends_lf = False
+        rep.add("plugin.json ends with newline", 1, ends_lf,
+                "ok" if ends_lf else "missing trailing \\n")
     if data:
         rep.add("plugin.json has name", 1, bool(data.get("name")), str(data.get("name")))
         rep.add("plugin.json has version", 1, bool(data.get("version")), str(data.get("version")))
@@ -188,6 +220,13 @@ def run_layer1(root: Path, rep: Report) -> None:
         rep.add("CHANGELOG top entry matches plugin.json version", 1,
                 top_version == data.get("version"),
                 f"CHANGELOG top={top_version} vs plugin.json={data.get('version')}")
+        # Mid-sentence truncation heuristic (promoted to CHANGELOG in 0.6.1
+        # after a silent truncation of the 0.4.0 entry — "- `README.md`
+        # rebuilt: th" — survived two release cycles because the heuristic
+        # only walked README.md and SKILL.md. Extending it here closes that
+        # gap; truncated changelog entries are now caught deterministically.)
+        rep.add("CHANGELOG not mid-sentence truncated", 1,
+                _ends_well(_tail_line(changelog)), _tail_line(changelog)[:80])
 
     # --- README ---
     readme = root / "README.md"
@@ -196,6 +235,29 @@ def run_layer1(root: Path, rep: Report) -> None:
         readme_text = readme.read_text()
         rep.add("README not mid-sentence truncated", 1, _ends_well(_tail_line(readme)),
                 _tail_line(readme)[:80])
+        # Version-reference drift check (promoted to Layer 1 in 0.6.2 after
+        # plugin/README.md silently disagreed with plugin.json across two
+        # release cycles — every bump required a manual edit to line ~5
+        # ("**Current version:** `0.x.y`") and the heuristic "I'll
+        # remember" failed. Now deterministic: any backticked version-
+        # looking token in README must equal plugin.json's version. We
+        # only assert if at least one such token exists, so a README that
+        # legitimately omits a version line (e.g. a fresh plugin) is not
+        # forced to add one.
+        if data and data.get("version"):
+            current = str(data["version"])
+            readme_versions = re.findall(r"`([0-9]+\.[0-9]+\.[0-9]+)`", readme_text)
+            if readme_versions:
+                # Every version-looking backticked token must match — drift
+                # in any one of them is a defect.
+                wrong = sorted({v for v in readme_versions if v != current})
+                rep.add(
+                    "README version reference matches plugin.json",
+                    1,
+                    not wrong,
+                    f"plugin.json={current}, README has stray: {', '.join(wrong)}"
+                    if wrong else f"all instances == {current}",
+                )
 
     # --- SKILL_TEMPLATE ---
     tpl = root / "SKILL_TEMPLATE.md"
@@ -207,91 +269,283 @@ def run_layer1(root: Path, rep: Report) -> None:
     rep.add("_shared/environments.md exists", 1, (shared / "environments.md").exists())
 
     # --- root stray files ---
-    # The ONE permitted *.plugin archive is `<plugin-name>.plugin`, where
-    # plugin-name comes from plugin.json. Any other *.plugin (e.g. a
-    # test-*.plugin or versioned artefact like neomint-toolkit-0.4.5.plugin)
-    # is stray build state — the canonical build procedure overwrites the
-    # single named file. This rule was tightened when a stray
-    # `test-neomint-toolkit.plugin` was found during the 0.4.6 cycle; the
-    # old rule tolerated any file ending in ".plugin" and the archive-
-    # cleanliness assertion picked `plugins[-1]` alphabetically, so the
-    # wrong file was being validated.
-    canonical_archive_name: str | None = None
-    if isinstance(data, dict) and isinstance(data.get("name"), str):
-        canonical_archive_name = f"{data['name']}.plugin"
+    # The plugin root holds source only — the whitelist is the closed set
+    # of source entries listed above. No *.plugin archive is permitted at
+    # the root (changed in 0.6.0; the build artefact lives in
+    # /tmp/<plugin-name>-workspace/ and ships via GitHub Releases). Any
+    # entry outside the whitelist is stray, full stop.
     if root.exists():
-        extras = []
-        for p in root.iterdir():
-            name = p.name
-            if name in ROOT_WHITELIST:
-                continue
-            if name.endswith(".plugin"):
-                if canonical_archive_name and name == canonical_archive_name:
-                    continue
-                # any other *.plugin is stray
-            extras.append(name)
-        rep.add("No stray files at plugin root", 1, not extras,
-                "stray: " + ", ".join(extras) if extras else "clean")
+        extras = sorted(p.name for p in root.iterdir() if p.name not in ROOT_WHITELIST)
+        rep.add(
+            "No stray files at plugin root",
+            1,
+            not extras,
+            "stray: " + ", ".join(extras) if extras else "clean",
+        )
 
-    # --- shipping archive contents match root whitelist ---
-    # If a *.plugin archive is present at the plugin root, its top-level
-    # entries must be a subset of (ROOT_WHITELIST ∪ known shipped items).
-    # This catches build-time mistakes that pack sibling folders by
-    # accident — e.g. zipping from /tmp instead of from the plugin root.
-    # The 0.4.4 → 0.4.5 cycle surfaced exactly this failure: a snapshot
-    # folder leaked into the archive and only got caught manually.
-    import zipfile
-    # Validate the CANONICAL archive (<plugin-name>.plugin) specifically,
-    # not "whichever .plugin sorts last". The previous implementation used
-    # `plugins[-1]` and silently validated a stray test artefact when two
-    # .plugin files coexisted — the canonical-archive rule now prevents
-    # that coexistence, but this assertion is belt-and-braces.
-    archive: Path | None = None
-    if canonical_archive_name:
-        candidate = root / canonical_archive_name
-        if candidate.exists():
-            archive = candidate
-    if archive is None:
-        rep.skip("Shipping archive contents are clean", 1,
-                 f"no {canonical_archive_name or '*.plugin'} at plugin root")
-    else:
+    # --- runtime-artefact sweep across the plugin tree and repo root ---
+    # Promoted to Layer 1 in 0.6.0 after iteration-1 of the update-plugin
+    # rename surfaced four classes of artefact that had silently lived in
+    # the source tree: an iteration workspace, a skill-snapshot folder, a
+    # built *.plugin archive, and the council session log COUNCIL.md.
+    # The new rule: nothing matching RUNTIME_ARTEFACT_BASENAMES or
+    # RUNTIME_ARTEFACT_GLOBS may exist anywhere in the plugin tree, nor
+    # one level up at the repo root next to the plugin folder.
+    import fnmatch
+    def _is_artefact(name: str) -> bool:
+        if name in RUNTIME_ARTEFACT_BASENAMES:
+            return True
+        return any(fnmatch.fnmatch(name, g) for g in RUNTIME_ARTEFACT_GLOBS)
+
+    # Directories that may legitimately contain artefact-looking files
+    # at the REPO-ROOT level but must still not produce hits inside them.
+    # These are infrastructure / VCS dirs that this check has no business
+    # walking. The plugin tree itself is walked in full minus .git.
+    REPO_ROOT_SWEEP_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__"}
+
+    # `dist/` at the repo root is the official delivery transition zone
+    # (added in 0.6.2 after the /tmp-only delivery pattern proved
+    # un-savable from inside Cowork on the user's machine). It is
+    # gitignored so contents never hit the source history; Layer 1
+    # tolerates it provided it contains ONLY *.plugin files (any other
+    # leftover — an extracted source tree, a JSON report, a stray html —
+    # is still a defect). See references/plugin-eval.md "Delivery —
+    # /tmp first, dist/ as documented fallback" for the contract.
+    DIST_DIR_NAME = "dist"
+
+    runtime_hits: list[str] = []
+    # walk the plugin tree (skip .git for speed and signal hygiene)
+    for path in root.rglob("*"):
         try:
-            with zipfile.ZipFile(archive) as zf:
-                top_level = set()
-                for member in zf.namelist():
-                    m = member
-                    # strip a single leading "./" prefix if present.
-                    # NOT lstrip — that would also eat a leading "." from
-                    # ".claude-plugin" and corrupt the top-level name.
-                    if m.startswith("./"):
-                        m = m[2:]
-                    if not m:
+            rel = path.relative_to(root)
+        except ValueError:
+            continue
+        if rel.parts and rel.parts[0] == ".git":
+            continue
+        if _is_artefact(path.name):
+            runtime_hits.append(str(rel))
+    # Repo-root sweep — was shallow iterdir() until 0.6.1. Defect pattern:
+    # a build artefact dropped into <repo>/dist/foo.plugin or similar
+    # subfolder was silently accepted because iterdir() only saw top-level
+    # entries. Switched to rglob so nested artefacts are caught. The
+    # plugin/ folder itself is skipped (handled by the plugin-tree walk
+    # above), and a short allowlist of infra dirs (VCS, venvs, caches) is
+    # not entered — everything else is fair game.
+    repo_root = root.parent
+    dist_misuse: list[str] = []
+    if repo_root != root and repo_root.exists():
+        for path in repo_root.rglob("*"):
+            try:
+                rel = path.relative_to(repo_root)
+            except ValueError:
+                continue
+            # don't re-walk the plugin tree or infra dirs
+            if rel.parts and (rel.parts[0] == root.name or rel.parts[0] in REPO_ROOT_SWEEP_SKIP_DIRS):
+                continue
+            # dist/ is the official delivery transition zone — *.plugin
+            # files inside it are tolerated, but any non-*.plugin file or
+            # any nested directory is a misuse and raises a separate
+            # finding so the artefact-sweep noise stays signal-rich.
+            if rel.parts and rel.parts[0] == DIST_DIR_NAME:
+                if path.is_dir():
+                    if len(rel.parts) > 1:
+                        dist_misuse.append(f"../{rel} (nested dir not allowed)")
+                    continue
+                if path.name.endswith(".plugin"):
+                    continue  # the legitimate case
+                dist_misuse.append(f"../{rel}")
+                continue
+            if _is_artefact(path.name):
+                runtime_hits.append(f"../{rel}")
+    rep.add(
+        "No runtime artefacts in plugin tree or repo root",
+        1,
+        not runtime_hits,
+        ("found: " + ", ".join(sorted(runtime_hits))) if runtime_hits else "clean",
+    )
+    rep.add(
+        "dist/ contains only *.plugin files (no nested dirs, no other extensions)",
+        1,
+        not dist_misuse,
+        ("misuse: " + ", ".join(sorted(dist_misuse))) if dist_misuse else "clean or absent",
+    )
+
+    # --- .gitignore covers *.plugin repo-wide (added 0.6.3) ---
+    # Defect pattern: the dist/ delivery transition zone (0.6.2) relies on
+    # *.plugin being gitignored repo-wide so that the staging copy never
+    # lands in a commit. If someone edits .gitignore and drops the *.plugin
+    # line — or narrows it to a specific subdir like "plugin/*.plugin" — the
+    # Layer 1 allowlist keeps the file out of the runtime-artefact sweep,
+    # but nothing would prevent the staging copy from being committed.
+    # This check asserts that .gitignore (at the repo root) has a pattern
+    # that is effectively repo-wide (a bare "*.plugin" line, or a line
+    # equivalent to it). Scoped patterns like "dist/*.plugin" or
+    # "plugin/*.plugin" are explicitly NOT accepted, because they only
+    # cover one directory.
+    gi_path = repo_root / ".gitignore"
+    if gi_path.exists():
+        gi_lines = [
+            ln.strip() for ln in gi_path.read_text().splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+        # Accepted: "*.plugin" (bare), "/*.plugin" equivalent at root.
+        # Rejected: "dist/*.plugin", "plugin/*.plugin", anything scoped.
+        repo_wide = any(ln in {"*.plugin", "/*.plugin"} for ln in gi_lines)
+        rep.add(
+            ".gitignore covers *.plugin repo-wide",
+            1,
+            repo_wide,
+            "ok" if repo_wide else "no repo-wide '*.plugin' pattern found",
+        )
+    else:
+        rep.add(
+            ".gitignore covers *.plugin repo-wide",
+            1,
+            False,
+            f"no .gitignore at repo root ({repo_root})",
+        )
+
+    # --- archive shape check for any staged dist/*.plugin (added 0.6.3) ---
+    # Defect pattern: Layer 1 validates the source tree and the documented
+    # build recipe, but never the built archive itself. A user following
+    # the recipe can still end up with a malformed .plugin — plugin.json
+    # missing inside, version drift between repo and archive, or runtime
+    # artefacts slipped into the zip (historical regressions: .mcpb-cache/
+    # in 0.3.x, stray *-workspace/ folders in 0.4.x). The dist/ fallback
+    # (0.6.2) makes a staged archive routinely available as a check target;
+    # this assertion opens every dist/*.plugin and verifies:
+    #   (a) .claude-plugin/plugin.json exists inside
+    #   (b) the archive's plugin.json version matches the repo's
+    #   (c) no artefact patterns appear anywhere in the archive's entry
+    #       list (*-workspace/, skill-snapshot/, .mcpb-cache/, nested
+    #       *.plugin, COUNCIL.md, eval-viewer-iter*.html)
+    # Extended in 0.6.4 (P10): completeness. Forbidding junk is only half
+    # the job — a corrupt build that is MISSING a skill file would pass (c)
+    # and (b) but ship a broken archive. (d) now asserts that every
+    # skills/<name>/SKILL.md in the source tree appears in the archive,
+    # and the _shared bundle files too.
+    # The check is skipped gracefully when no dist/*.plugin exists — the
+    # /tmp-only delivery path is still valid and we don't want to force
+    # users to stage a copy just to satisfy a check.
+    import zipfile as _zipfile
+    archive_problems: list[str] = []
+    archives_found = []
+    dist_dir = repo_root / DIST_DIR_NAME
+    if dist_dir.is_dir():
+        archives_found = sorted(p for p in dist_dir.iterdir() if p.is_file() and p.name.endswith(".plugin"))
+
+    # Collect required archive entries from the source tree. Only files
+    # that must ship are listed — evals/, scripts/, references/ are
+    # optional per-skill and not universally asserted.
+    required_entries: set[str] = set()
+    skills_dir = root / "skills"
+    if skills_dir.is_dir():
+        for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir() and p.name != "_shared"):
+            skill_md = skill_dir / "SKILL.md"
+            if skill_md.exists():
+                required_entries.add(f"skills/{skill_dir.name}/SKILL.md")
+        shared = skills_dir / "_shared"
+        if shared.is_dir():
+            for name in ("language.md", "environments.md"):
+                if (shared / name).exists():
+                    required_entries.add(f"skills/_shared/{name}")
+    # Plugin manifest is already required by (a), but also list it as an
+    # entry so the "required_entries" diagnostic is self-contained.
+    required_entries.add(".claude-plugin/plugin.json")
+
+    if archives_found and data and data.get("version"):
+        repo_version = str(data["version"])
+        artefact_patterns_in_archive = re.compile(
+            r"(^|/)("
+            r"[^/]*-workspace/"
+            r"|skill-snapshot/"
+            r"|\.mcpb-cache/"
+            r"|__pycache__/"
+            r"|COUNCIL\.md$"
+            r"|eval-viewer-iter[^/]*\.html$"
+            r"|[^/]+\.plugin$"
+            r"|[^/]+\.pyc$"
+            r")"
+        )
+        for arc in archives_found:
+            label = f"dist/{arc.name}"
+            try:
+                with _zipfile.ZipFile(arc) as z:
+                    names = z.namelist()
+                    names_set = set(names)
+                    # (a) plugin.json inside
+                    if ".claude-plugin/plugin.json" not in names_set:
+                        archive_problems.append(f"{label}: missing .claude-plugin/plugin.json")
                         continue
-                    head = m.split("/", 1)[0]
-                    top_level.add(head)
-            # Allowed top-level entries inside the archive: the root
-            # whitelist minus entries that are never shipped (.git,
-            # repo-publication files), plus nothing else. Any extra
-            # entry is build-time leakage.
-            never_shipped = {
-                ".git",
-                ".gitignore",
-                ".github",
-                "CONTRIBUTING.md",
-            }
-            allowed = (ROOT_WHITELIST - never_shipped)
-            stray_in_archive = sorted(top_level - allowed)
-            rep.add(
-                "Shipping archive contents are clean",
-                1,
-                not stray_in_archive,
-                f"archive={archive.name}; "
-                + ("stray entries: " + ", ".join(stray_in_archive)
-                   if stray_in_archive else "clean"),
-            )
-        except zipfile.BadZipFile:
-            rep.add("Shipping archive contents are clean", 1, False,
-                    f"{archive.name} is not a valid zip archive")
+                    # (b) version match
+                    try:
+                        arc_data = json.loads(z.read(".claude-plugin/plugin.json"))
+                        arc_version = str(arc_data.get("version", ""))
+                        if arc_version != repo_version:
+                            archive_problems.append(
+                                f"{label}: version {arc_version!r} != repo {repo_version!r}"
+                            )
+                    except Exception as e:
+                        archive_problems.append(f"{label}: plugin.json unreadable ({e})")
+                    # (c) no artefact patterns in entries
+                    bad_entries = [n for n in names if artefact_patterns_in_archive.search(n)]
+                    if bad_entries:
+                        archive_problems.append(
+                            f"{label}: artefact entries inside — {', '.join(sorted(bad_entries)[:3])}"
+                        )
+                    # (d) completeness — every required source file present
+                    missing = sorted(required_entries - names_set)
+                    if missing:
+                        archive_problems.append(
+                            f"{label}: missing entries — {', '.join(missing[:5])}"
+                        )
+            except _zipfile.BadZipFile:
+                archive_problems.append(f"{label}: not a valid zip")
+    # P16 (0.6.5): when no staged archive exists, surface a SKIP rather
+    # than a silent PASS so the run summary distinguishes "archive valid"
+    # from "no archive to check". Prior behaviour was a PASS with detail
+    # "no staged archive (ok)" — informationally correct but invisible
+    # in the PASS=N count, so a half-finished build that left an empty
+    # dist/ looked identical to a clean release. SKIP is the right shape:
+    # the assertion was not exercised, not satisfied vacuously.
+    if not archives_found:
+        rep.skip(
+            "dist/*.plugin archive shape (plugin.json present, version matches, no artefacts, all skills included)",
+            1,
+            "no staged archive in dist/ — check not exercised",
+        )
+    else:
+        rep.add(
+            "dist/*.plugin archive shape (plugin.json present, version matches, no artefacts, all skills included)",
+            1,
+            not archive_problems,
+            (
+                f"{len(archives_found)} archive(s) checked: clean"
+                if not archive_problems
+                else "; ".join(archive_problems)
+            ),
+        )
+
+    # --- dist/ lifecycle: --strict-release requires an empty dist/ (0.6.4) ---
+    # Defect pattern: the dist/ transition zone is intentionally transient
+    # — a staged archive sits there between "build" and "uploaded as
+    # GitHub Release asset". After the release is cut, dist/ is expected
+    # to be empty again. Nothing currently enforces that step; a forgotten
+    # archive in dist/ after a release survives into the next cycle and
+    # quietly contradicts the "permanent home is GitHub Releases" story.
+    # The --strict-release flag, used in CI on a release-tag push or
+    # invoked manually post-release, FAILs on any *.plugin in dist/. In
+    # the default (non-strict) state, a staged archive is tolerated — so
+    # the everyday developer workflow is not disrupted.
+    if strict_release:
+        rep.add(
+            "dist/ is empty (strict-release mode)",
+            1,
+            not archives_found,
+            "clean" if not archives_found else (
+                "staged archives present: " + ", ".join(a.name for a in archives_found)
+            ),
+        )
 
     # --- documented build commands match never_shipped design ---
     # Promoted from Layer 3 (0.4.5 → 0.4.6 cycle). Defect pattern: a build
@@ -309,7 +563,6 @@ def run_layer1(root: Path, rep: Report) -> None:
     # appear in any documented -x exclusion. Every name in never_shipped
     # that exists as a real root entry MUST appear in every documented
     # build command's exclusion list.
-    import fnmatch
     never_shipped_design = {".git", ".gitignore", ".github", "CONTRIBUTING.md"}
     ships_at_root = ROOT_WHITELIST - never_shipped_design - {".git", ".gitignore"}
     for doc_name in ("README.md", "CONTRIBUTING.md"):
@@ -396,6 +649,27 @@ def run_layer1(root: Path, rep: Report) -> None:
                 desc_len <= 1024,
                 f"{desc_len} chars ({'OK' if desc_len <= 1024 else 'will be truncated'})",
             )
+            # disable-model-invocation: true requires user-invocable: true.
+            # Promoted to Layer 1 in 0.6.1 after a Layer 3 audit found the
+            # council skill missing user-invocable despite disable-model-
+            # invocation being set. In Claude Code plugin contexts (confirmed
+            # on anthropics/claude-code issues #26251 and #22345) a skill
+            # with disable-model-invocation: true becomes unreachable via
+            # slash command unless user-invocable: true is also present —
+            # the flag the governance skill sets on itself and that
+            # references/plugin-eval.md documents as mandatory. Skills
+            # without disable-model-invocation (auto-triggering or Auto+
+            # Command pattern) do not need the flag.
+            dmi = fm.get("disable-model-invocation", "").strip().lower() == "true"
+            if dmi:
+                uinv = fm.get("user-invocable", "").strip().lower() == "true"
+                rep.add(
+                    f"[{name}] disable-model-invocation implies user-invocable: true",
+                    1,
+                    uinv,
+                    "both set" if uinv
+                    else "missing user-invocable: true — slash command would be unreachable",
+                )
         text = skill_md.read_text()
         rep.add(f"[{name}] references _shared/language.md", 1,
                 "_shared/language.md" in text)
@@ -494,21 +768,33 @@ def run_layer1(root: Path, rep: Report) -> None:
         rep.add("README has no ghost-skill references", 1, not ghosts,
                 ("ghosts: " + ", ".join(ghosts)) if ghosts else "clean")
 
-    # --- commands/ ↔ skills/ pairing (explicit-invocation contract) ---
-    # Introduced in 0.5.0 with the council slash-command refactor.
-    # The standard (README, governance SKILL.md) says: the `commands/` directory
-    # is relevant ONLY for explicit-invocation skills, and the pairing is
-    # bidirectional:
+    # --- commands/ ↔ skills/ pairing (three legal patterns) ---
+    # Introduced in 0.5.0 with the council slash-command refactor. Extended in
+    # 0.6.0 to allow a third pattern ("Auto + Command").
     #
-    #   commands/<name>.md  ⇔  skills/<name>/SKILL.md with disable-model-invocation: true
+    # The standard (README, governance SKILL.md) recognises three legal
+    # shapes for a skill:
     #
-    # This assertion catches both halves of the contract going silently out of
-    # sync — e.g. a command added without its skill being marked non-auto
-    # (so the skill would still auto-fire and race the command), or a skill
-    # marked non-auto without its command (so the skill is unreachable in
-    # Claude Code / Cowork). The Layer 3 audit on 0.5.0 surfaced the gap; this
-    # assertion promotes it into a Layer 1 assertion so the standard is
-    # enforced going forward, not just for council.
+    #   1. Auto-only:      skills/<name>/SKILL.md (no disable-model-invocation),
+    #                      no commands/<name>.md.
+    #                      The model decides when to fire; no user-visible command.
+    #
+    #   2. Command-only:   skills/<name>/SKILL.md with disable-model-invocation: true
+    #                      + commands/<name>.md (the only entry point).
+    #                      Used when auto-firing would race the user's intent
+    #                      (e.g. /council, /update-plugin).
+    #
+    #   3. Auto + Command: skills/<name>/SKILL.md (auto-trigger) + commands/<name>.md.
+    #                      The skill auto-fires on clear intent signals AND the
+    #                      user can invoke it explicitly. Used for skills where
+    #                      either path is legitimate (e.g. /rename-pdf: the model
+    #                      can trigger it on "clean up my scans", and the user
+    #                      can also call it directly with a folder argument).
+    #
+    # The two assertions below enforce the contract:
+    #   Forward: every command needs a paired skill (any pattern — 2 or 3).
+    #   Reverse: every non-auto skill (pattern 2) needs its command, otherwise
+    #            the skill is unreachable in Claude Code / Cowork.
     commands_dir = root / "commands"
     commands: dict[str, Path] = {}
     if commands_dir.exists() and commands_dir.is_dir():
@@ -526,24 +812,23 @@ def run_layer1(root: Path, rep: Report) -> None:
         if fm and fm.get("disable-model-invocation", "").strip().lower() == "true":
             non_auto_skills.add(skill_dir.name)
 
-    # Forward direction: every commands/<name>.md needs a paired non-auto skill
+    # Forward direction: every commands/<name>.md needs a paired skill
+    # (any of the three legal patterns — the command is always an entry
+    # into a skill, never standalone)
     for cmd_name, cmd_path in sorted(commands.items()):
         paired_skill_md = skills_dir / cmd_name / "SKILL.md"
         paired_exists = paired_skill_md.exists()
-        paired_non_auto = cmd_name in non_auto_skills
-        ok = paired_exists and paired_non_auto
-        if not paired_exists:
-            detail = f"missing skills/{cmd_name}/SKILL.md"
-        elif not paired_non_auto:
-            detail = f"skills/{cmd_name}/SKILL.md missing disable-model-invocation: true"
+        if paired_exists:
+            detail = "paired (auto+command)" if cmd_name not in non_auto_skills else "paired (command-only)"
         else:
-            detail = "paired"
+            detail = f"missing skills/{cmd_name}/SKILL.md"
         rep.add(
-            f"commands/{cmd_name}.md pairs with a non-auto skill",
-            1, ok, detail,
+            f"commands/{cmd_name}.md pairs with a skill",
+            1, paired_exists, detail,
         )
 
     # Reverse direction: every non-auto skill needs a paired command file
+    # (pattern 2 — command is the only entry point, so the command must exist)
     for skill_name in sorted(non_auto_skills):
         has_cmd = skill_name in commands
         rep.add(
@@ -589,11 +874,194 @@ def run_layer2(root: Path, rep: Report) -> None:
 # Main
 # -----------------------------------------------------------------------------
 
+# P17 (0.6.6): per-grader assertion floor bands. The verbose summary
+# surfaces drift but does not gate on it; --count-strict turns the same
+# data into a hard contract so a grader that silently loses checks fails
+# the build. The numbers are floors, not exact targets — graders are
+# allowed to grow, never shrink. Pin to the count observed at the time
+# the band was introduced; bumping a floor is a deliberate act of the
+# next release that adds checks. Skills not listed here are not gated.
+LAYER2_GRADER_FLOORS: dict[str, int] = {
+    "council": 48,
+    "rename-pdf": 16,
+    "update-plugin": 14,
+}
+
+
+def _archive_forensics(root: Path) -> list[tuple[str, dict[str, int | str]]]:
+    """Per-archive forensic stats for verbose mode (P20, 0.6.6).
+
+    Returns a list of (archive_label, stats) tuples for every
+    *.plugin in dist/. Stats include skill count, top-level command
+    count, total markdown lines, and .py file count. Empty list if
+    no archive is staged.
+
+    The check above (archive shape) gates on correctness — does the
+    archive contain plugin.json, does the version match, are artefacts
+    excluded. Forensics answer a different question: is the archive
+    the *expected size and shape*? An archive that drops from 80 to 20
+    markdown lines, or loses half its skills, is technically valid but
+    obviously broken. Surfacing the numbers in --verbose lets the
+    operator (or CI log diff) catch silent shrinkage during build.
+    """
+    import zipfile as _zipfile
+    out: list[tuple[str, dict[str, int | str]]] = []
+    dist_dir = root.parent / "dist"
+    if not dist_dir.is_dir():
+        return out
+    archives = sorted(p for p in dist_dir.iterdir() if p.is_file() and p.name.endswith(".plugin"))
+    for arc in archives:
+        label = f"dist/{arc.name}"
+        try:
+            with _zipfile.ZipFile(arc) as z:
+                names = z.namelist()
+        except Exception as e:
+            out.append((label, {"error": f"unreadable: {e}"}))
+            continue
+        skills: set[str] = set()
+        commands = 0
+        md_lines = 0
+        py_files = 0
+        for n in names:
+            parts = n.split("/")
+            if len(parts) >= 2 and parts[0] == "skills" and parts[1] not in ("", "_shared"):
+                skills.add(parts[1])
+            if len(parts) >= 2 and parts[0] == "commands" and n.endswith(".md") and parts[1]:
+                commands += 1
+            if n.endswith(".md"):
+                try:
+                    with _zipfile.ZipFile(arc) as z:
+                        md_lines += z.read(n).decode("utf-8", errors="replace").count("\n")
+                except Exception:
+                    pass
+            if n.endswith(".py"):
+                py_files += 1
+        out.append((label, {
+            "skills": len(skills),
+            "commands": commands,
+            "md_lines": md_lines,
+            "py_files": py_files,
+            "total_entries": len(names),
+        }))
+    return out
+
+
+def _layer2_grader_counts(root: Path) -> list[tuple[str, int | None, str]]:
+    """Collect per-skill grader assertion counts via each grader's
+    --count-only mode (introduced 0.6.4 / P12). Returns a list of
+    (skill_name, count_or_None, detail) tuples in skill-name order.
+
+    A None count means the grader either does not exist, does not
+    support --count-only, or failed to produce a parseable integer.
+    The detail field carries a short human note for the verbose summary.
+    """
+    skills_dir = root / "skills"
+    out: list[tuple[str, int | None, str]] = []
+    if not skills_dir.exists():
+        return out
+    for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir() and p.name != "_shared"):
+        name = skill_dir.name
+        grader: Path | None = None
+        for candidate in PER_SKILL_GRADER_CANDIDATES:
+            if (skill_dir / candidate).exists():
+                grader = skill_dir / candidate
+                break
+        if grader is None:
+            out.append((name, None, "no grader script"))
+            continue
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(grader), "--count-only"],
+                capture_output=True, text=True, timeout=30,
+            )
+            raw = (proc.stdout or "").strip().splitlines()
+            try:
+                count = int(raw[-1]) if raw else None
+            except ValueError:
+                count = None
+            if count is None:
+                out.append((name, None, "grader did not return integer"))
+            else:
+                out.append((name, count, "ok"))
+        except Exception as e:
+            out.append((name, None, f"grader call failed: {e}"))
+    return out
+
+
 def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
+    # Minimal CLI — kept in-script (no argparse) to stay dependency-free
+    # and readable at a glance. Supported forms:
+    #   plugin-check.py [<plugin-root>]
+    #   plugin-check.py [<plugin-root>] --strict-release
+    #   plugin-check.py [<plugin-root>] --verbose
+    # Flags compose freely.
+    #
+    # --strict-release (0.6.4) enforces the post-release invariant that
+    # dist/ must be empty — the GitHub Release asset list is the
+    # permanent home, dist/ is only a transient staging area. In
+    # non-strict (default) mode, a staged dist/*.plugin is tolerated.
+    #
+    # --verbose (0.6.5) prints per-skill Layer 2 assertion counts after
+    # the standard summary, by calling each grader's --count-only mode.
+    # The aggregate "PASS=N" hides per-grader drift; this mode makes
+    # the assertion budget per skill visible at a glance, so a grader
+    # that silently loses checks (regression in instrumentation, accidental
+    # rule deletion) is caught before it ships.
+    #
+    # --count-strict (0.6.6) turns the same per-grader counts into a
+    # hard gate: any grader listed in LAYER2_GRADER_FLOORS that returns
+    # fewer assertions than its floor causes the run to fail. This is
+    # the deterministic complement to --verbose: --verbose surfaces
+    # drift, --count-strict prevents shipping it. Release CI should run
+    # both together (--strict-release --verbose --count-strict).
+    args = sys.argv[1:]
+    strict_release = False
+    verbose = False
+    count_strict = False
+    positional: list[str] = []
+    for a in args:
+        if a == "--strict-release":
+            strict_release = True
+        elif a == "--verbose":
+            verbose = True
+        elif a == "--count-strict":
+            count_strict = True
+        elif a in ("-h", "--help"):
+            print(
+                "usage: plugin-check.py [<plugin-root>] "
+                "[--strict-release] [--verbose] [--count-strict]"
+            )
+            return 0
+        else:
+            positional.append(a)
+    root = Path(positional[0] if positional else ".").resolve()
     rep = Report(root=str(root))
-    run_layer1(root, rep)
+    run_layer1(root, rep, strict_release=strict_release)
     run_layer2(root, rep)
+
+    # P17 (0.6.6): per-grader band enforcement. Compute counts once
+    # here so both --count-strict (which adds Layer 1 assertions to
+    # rep) and --verbose (which prints them below) can reuse the same
+    # data without invoking each grader twice.
+    grader_counts: list[tuple[str, int | None, str]] | None = None
+    if count_strict or verbose:
+        grader_counts = _layer2_grader_counts(root)
+    if count_strict and grader_counts is not None:
+        observed = {name: count for name, count, _ in grader_counts}
+        for skill, floor in LAYER2_GRADER_FLOORS.items():
+            actual = observed.get(skill)
+            if actual is None:
+                rep.add(
+                    f"--count-strict: {skill} grader assertion floor (>= {floor})",
+                    1, False,
+                    "grader missing or did not return integer count",
+                )
+            else:
+                rep.add(
+                    f"--count-strict: {skill} grader assertion floor (>= {floor})",
+                    1, actual >= floor,
+                    f"observed {actual} assertions (floor {floor})",
+                )
 
     # print human summary
     print(f"Plugin check: {rep.root}")
@@ -614,9 +1082,69 @@ def main() -> int:
             if r.verdict == "SKIP":
                 print(f"  [L{r.layer}] {r.name} — {r.detail}")
 
-    # write JSON report outside the plugin root to avoid polluting it
-    report_path = Path("/tmp") / "plugin-check-report.json"
+    # P13 (0.6.5): verbose summary surfaces per-skill Layer 2 assertion
+    # counts via each grader's --count-only mode. The standard summary
+    # collapses Layer 2 to a single PASS/FAIL per skill, hiding the
+    # assertion budget — so a grader that silently loses checks looks
+    # identical to one that genuinely passes everything. Verbose mode
+    # exposes the per-grader counts and totals them so drift between
+    # runs is visible without diffing JSON reports.
+    if verbose:
+        print()
+        print("Layer 2 grader assertion counts (via --count-only):")
+        counts = grader_counts if grader_counts is not None else _layer2_grader_counts(root)
+        total = 0
+        for name, count, detail in counts:
+            if count is None:
+                print(f"  [L2] {name}: — ({detail})")
+            else:
+                floor = LAYER2_GRADER_FLOORS.get(name)
+                if floor is not None:
+                    marker = "OK" if count >= floor else "BELOW FLOOR"
+                    print(f"  [L2] {name}: {count} assertions (floor {floor} — {marker})")
+                else:
+                    print(f"  [L2] {name}: {count} assertions (no floor pinned)")
+                total += count
+        if any(c is not None for _, c, _ in counts):
+            print(f"  [L2] total Layer 2 assertions: {total}")
+
+        # P20 (0.6.6): archive forensics. The archive-shape assertion
+        # above answers "is the archive structurally valid?" — these
+        # numbers answer "does the archive look the size and shape we
+        # expect?". An archive that loses half its skills or drops 60%
+        # of its markdown lines passes shape but is obviously broken;
+        # surfacing the counts in --verbose makes silent shrinkage
+        # visible in the CI log without diffing extracted trees.
+        forensics = _archive_forensics(root)
+        if forensics:
+            print()
+            print("Archive forensics (dist/*.plugin):")
+            for label, stats in forensics:
+                if "error" in stats:
+                    print(f"  {label}: {stats['error']}")
+                else:
+                    print(
+                        f"  {label}: "
+                        f"{stats['skills']} skills, "
+                        f"{stats['commands']} commands, "
+                        f"{stats['md_lines']} md-lines, "
+                        f"{stats['py_files']} .py files, "
+                        f"{stats['total_entries']} entries"
+                    )
+
+    # write JSON report into the plugin's own /tmp workspace to avoid
+    # cross-user permission collisions on a shared /tmp.
+    plugin_name: str | None = None
+    plugin_json_for_report = root / ".claude-plugin" / "plugin.json"
     try:
+        if plugin_json_for_report.exists():
+            plugin_name = json.loads(plugin_json_for_report.read_text()).get("name")
+    except Exception:
+        plugin_name = None
+    workspace_dir = Path("/tmp") / f"{plugin_name or 'plugin'}-workspace" / "plugin-check"
+    try:
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        report_path = workspace_dir / "report.json"
         report_path.write_text(json.dumps(rep.to_dict(), indent=2))
         print()
         print(f"Report written: {report_path}")

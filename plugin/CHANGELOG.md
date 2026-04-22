@@ -10,6 +10,451 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.6.7 — 2026-04-22
+
+Single-issue fix surfaced after 0.6.6 shipped: the slash-commands
+were not enforcing the output-language rule on their first response.
+
+- **Inline output-language directive in every command file.** Each of
+  `commands/council.md`, `commands/rename-pdf.md`, and
+  `commands/update-plugin.md` previously said "Apply
+  `skills/_shared/language.md`" as step 2 of the body. That works for
+  every assistant message *after* the skill has been read — but the
+  command's own first response (the Council's T1, the rename-pdf
+  greeting, the update-plugin Step 0 announcement) is generated
+  before the body is acted on, so the language rule had no chance to
+  fire and the model defaulted to English even when the user had
+  written in German. The fix is a five-line **Output language**
+  block at the top of each command file, immediately after the
+  `# /<name>` heading: a one-paragraph summary of the rule (German
+  in → German out, English in → English out, explicit user override
+  wins) plus a pointer to `skills/_shared/language.md` for the full
+  text. The rule now applies from token one of the first reply,
+  before any further file is read. The wording is contextually
+  tailored per command — `council.md` references "the very first
+  sentence of T1" because T1 is the council's named opening turn,
+  while `rename-pdf.md` and `update-plugin.md` say "from your first
+  response" because they have no turn vocabulary. The substance is
+  the same across all three; only the timing reference adapts to
+  the skill's own conventions. The body still references the shared
+  file so the canonical rule has a single source of truth.
+
+---
+
+## 0.6.6 — 2026-04-22
+
+Hardening of the verbose surface introduced in 0.6.5: turn the
+counts that `--verbose` reveals into a hard contract, share the
+self-counting helper across graders, parallelise CI grader runs,
+and add archive forensics to verbose output. Four self-optimisation
+proposals surfaced by the 0.6.5 Layer 3 audit. Governance and
+tooling only — no skill content changes, no user-visible behaviour
+changes for council, rename-pdf, or update-plugin.
+
+- **Layer 1: `--count-strict` enforces per-grader assertion floors.**
+  `--verbose` (0.6.5) made grader-instrumentation drift visible in
+  the CI log, but it did not gate on it. A grader that silently
+  loses checks would print a smaller number and still ship. The new
+  `--count-strict` flag turns the per-grader floors in the new
+  `LAYER2_GRADER_FLOORS` constant (`council` ≥ 48, `rename-pdf` ≥
+  16, `update-plugin` ≥ 14) into hard Layer 1 assertions: a grader
+  below its floor causes the run to fail. Floors are pinned to the
+  count observed at the time the band was introduced and may only
+  grow — bumping a floor is a deliberate act of the next release
+  that adds checks. CI now invokes both flags together
+  (`--strict-release --verbose --count-strict`) so drift is both
+  visible and blocking.
+- **Layer 2: `_shared/grader_utils.py` library for self-counting.**
+  The static-analysis pattern that lets a grader self-report its
+  assertion count (introduced 0.6.4 / P12 in the council grader)
+  was inline; future graders adopting the pattern would have to
+  copy-paste the implementation. Extracted to
+  `plugin/skills/_shared/grader_utils.py` as `count_failure_sites()`
+  alongside the existing `language.md` and `environments.md`. The
+  council grader now imports from the shared helper. Per-skill
+  graders run as standalone scripts (not packages), so the import
+  uses the documented `sys.path.insert` pattern — verbose but
+  explicit, preferable to packaging the plugin as a Python module.
+- **CI: matrix strategy for parallel grader execution.**
+  `.github/workflows/plugin-check.yml` previously ran every Layer 2
+  grader as a sequential shell block in one job. Refactored so
+  Layer 1 stays as a single fail-fast job (now invoked with
+  `--verbose --count-strict`) and Layer 2 fans out to a matrix
+  (`fail-fast: false`) so each grader is its own check in the PR
+  UI, runs in parallel rather than serially, and adding a new
+  per-skill grader is a single matrix entry instead of a
+  copy-pasted shell block.
+- **Release CI now invokes `--count-strict`.** The `--strict-release
+  --verbose` invocation in `.github/workflows/release.yml` is extended
+  to `--strict-release --verbose --count-strict`, so a release cannot
+  publish when any per-grader floor in `LAYER2_GRADER_FLOORS` has been
+  violated. Without this, the floors would be enforced by the PR
+  workflow but skipped at release time — a half-wired gate.
+- **Layer 1: archive forensics in `--verbose` output.** The
+  archive-shape assertion (0.6.3 / P7) answers "is the archive
+  structurally valid?". It does not answer "does the archive look
+  the size and shape we expect?" — an archive that loses half its
+  skills or drops 60% of its markdown lines passes shape but is
+  obviously broken. Verbose mode now appends per-archive forensic
+  stats (skill count, command count, total markdown lines, .py
+  file count, total entries) so silent shrinkage during build is
+  visible in the CI log without diffing extracted trees.
+- **Layer 1: archive artefact regex catches `__pycache__/` and `*.pyc`.**
+  Surfaced during 0.6.6 packaging itself: the build recipe excluded
+  `*.DS_Store`, `*/evals/*`, and `*.plugin`, but Python bytecode
+  caches generated by running the graders during the verification
+  pass slipped through and ended up in the staged archive — passing
+  the existing artefact regex unflagged. Both surfaces are tightened:
+  the regex in `plugin-check.py` now flags any `__pycache__/` path or
+  `.pyc` entry as an artefact, and the build recipes in
+  `update-plugin/SKILL.md` Step 4 and `.github/workflows/release.yml`
+  exclude them from the zip in the first place. The P20 archive
+  forensics counter (`.py files`) was the surface that made this
+  visible; without it the bytecode would have shipped silently.
+
+---
+
+## 0.6.5 — 2026-04-22
+
+CI integration + Layer 1 observability. Four self-optimisation
+proposals surfaced by the 0.6.4 Layer 3 audit: governance and
+tooling only, no skill content changes, no user-visible behaviour
+changes for council, rename-pdf, or update-plugin.
+
+- **Layer 1: `--verbose` mode surfaces per-grader counts.** The
+  aggregate `PASS=N` line collapses every Layer 2 grader to a single
+  PASS/FAIL bit, so a grader that silently loses checks (regression
+  in instrumentation, accidental rule deletion) looks identical to
+  one that genuinely passes everything. The new `--verbose` flag
+  calls each grader's `--count-only` mode (added 0.6.4 / P12) and
+  prints `[L2] <skill>: N assertions` plus a Layer 2 total. Drift
+  between runs is now visible from the CI log without diffing JSON
+  reports. Cost: three subprocess calls per run, only when the flag
+  is set.
+- **Layer 1: archive-shape check now SKIPs explicitly when no archive
+  is staged.** Prior behaviour was a silent PASS with detail
+  "no staged archive (ok)" — informationally correct but invisible
+  in the `PASS=N` count, so a half-finished build that left an empty
+  `dist/` looked identical to a clean release. The check now produces
+  a SKIP verdict with the explicit detail `no staged archive in
+  dist/ — check not exercised`. The PASS path is preserved when an
+  archive *is* staged; the new detail line shows
+  `N archive(s) checked: clean` so the count is visible. SKIP is the
+  correct shape — the assertion was not exercised, not satisfied
+  vacuously.
+- **Release CI uses `--strict-release` and `--verbose`.**
+  `.github/workflows/release.yml` previously called `plugin-check.py`
+  in default mode, so a stale archive in `dist/` at release time
+  would not block the release — and the version-drift check would
+  silently succeed against the OLD archive's version because we just
+  bumped `plugin.json`. The release step now runs
+  `plugin-check.py plugin --strict-release --verbose`, making the
+  empty-`dist/` invariant a deterministic precondition for cutting a
+  release. The PR workflow (`plugin-check.yml`) also adopts
+  `--verbose` so per-grader counts appear in every CI log, not just
+  release runs.
+- **`plugin-eval.md`: explicit cross-reference for `--strict-release`.**
+  The flag was documented in `update-plugin/SKILL.md` Step 4 and
+  mentioned in the 0.6.4 CHANGELOG, but `references/plugin-eval.md`
+  — the file the Layer 3 audit subagent reads — only described the
+  lifecycle abstractly. The Delivery section now names the flag
+  explicitly and points at the CI workflow that invokes it; the
+  Delivery audit category gains a seventh question that the subagent
+  must answer (does CI actually use the flag, or is the enforcement
+  theoretical?). Closes the 0.6.4 audit's P15 finding without
+  changing audit semantics.
+- **Defect-injection verification.** P13 verbose output verified by
+  comparing reported counts against direct `--count-only` calls
+  (council=50, rename-pdf=16, update-plugin=14). P16 archive-skipped
+  state verified against both empty `dist/` (SKIP appears) and a
+  staged archive (PASS with archive count appears).
+
+## 0.6.4 — 2026-04-22
+
+Delivery-flow hardening + grader self-introspection. Four
+self-optimisation proposals surfaced by the 0.6.3 cycle: three
+deterministic Layer 1 changes plus one Layer 2 reform that closes
+the 0.6.1 "counts drift" hedge. No skill content changes for
+council or rename-pdf; no user-visible behaviour changes.
+
+- **Layer 1: `dist/` lifecycle strict mode (`--strict-release`).**
+  The `dist/` transition zone is intentionally a *staging* area —
+  archives belong there briefly, then get distributed and removed.
+  Without enforcement, stale archives accumulate and the version-drift
+  check (added 0.6.3) silently degrades because old archives still
+  match an older `plugin.json`. The new opt-in flag adds an assertion
+  that FAILs if `dist/*.plugin` is non-empty after release. Default
+  mode stays permissive (the staging archive is normal during a
+  release); `--strict-release` is the gate to run *after* publishing
+  the archive elsewhere. Documented in SKILL.md Step 4.
+- **Layer 1: archive completeness — every `skills/*/SKILL.md` must
+  appear in the archive.** The 0.6.3 archive-shape check verified
+  what *shouldn't* be inside an archive (no runtime artefacts) and
+  the metadata header (plugin.json present, version matches) but
+  did not verify what *must* be inside. A build script that quietly
+  drops a skill directory would have shipped silently. The extended
+  check collects every `skills/*/SKILL.md` from the source tree and
+  FAILs if any is missing from any `dist/*.plugin` archive. Pairs
+  with the 0.6.3 shape check for full structural coverage.
+- **SKILL.md Step 4: idempotent build recipe.** The 0.6.3 packaging
+  manually deleted the stale 0.6.2 archive from `dist/` because
+  `cp` would have left both side-by-side, breaking the version-drift
+  check. The recipe now prefixes `mkdir -p dist/` and
+  `rm -f dist/*.plugin` so the staging step is idempotent — running
+  it twice produces the same result, and a half-finished previous
+  build cannot poison a new one. Also adds a pointer to the
+  `--strict-release` flag for the post-distribution audit step.
+- **Layer 2: graders self-report their check counts (`--count-only`).**
+  The 0.6.1 Layer 1 grader-stat check hedged with a "counts drift"
+  warning because Layer 2 grader counts were not addressable from
+  outside the grader. Each Layer 2 grader now exposes `--count-only`
+  which prints just the assertion count, and the rename-pdf and
+  update-plugin graders explicitly track `checks += 1` at every
+  assertion site. The council grader uses static analysis
+  (`_self_check_count()` counts `failures.append(` sites in its own
+  source) to avoid high-risk instrumentation churn across its 50+
+  assertion blocks. PASS/FAIL output now includes the count, so
+  Layer 1 can verify expected count vs actual count without
+  re-implementing each grader.
+- **Defect-injection verification.** Each new Layer 1 assertion was
+  verified via the tempdir-injection pattern: P9 by leaving a
+  staged archive in `dist/` and running with `--strict-release`,
+  P10 by removing a `SKILL.md` from the source tree and rebuilding
+  the archive. Both behaved as designed.
+
+## 0.6.3 — 2026-04-22
+
+Layer 1 depth + Layer 3 category refinement. Three self-optimisation
+proposals surfaced by the 0.6.2 cycle — two deterministic assertions
+and one codified brief change. No skill content changes; no Layer 2
+grader changes; no user-visible behaviour changes.
+
+- **Layer 1: `.gitignore` must cover `*.plugin` repo-wide.** The
+  0.6.2 `dist/` delivery transition zone works because the staging
+  copy cannot land in a commit, and that depends on `.gitignore`
+  having a repo-wide `*.plugin` line. If a future edit narrows the
+  pattern to `dist/*.plugin` or drops it entirely, nothing catches it
+  until someone accidentally commits an archive. The new check parses
+  `.gitignore` at the repo root and FAILs unless it contains a bare
+  `*.plugin` or `/*.plugin` line (scoped patterns like `dist/*.plugin`
+  are explicitly rejected). Cost: one file read.
+- **Layer 1: `dist/*.plugin` archive shape check.** Every prior Layer
+  1 check validated the source tree and the build recipe *text*, but
+  nothing validated the built archive. The 0.6.2 `dist/` transition
+  zone makes a staged archive routinely available; this assertion
+  opens every `dist/*.plugin` and verifies (a) `.claude-plugin/plugin.json`
+  exists inside, (b) its `version` matches the repo's `plugin.json`
+  version, (c) no runtime-artefact patterns (`*-workspace/`,
+  `skill-snapshot/`, `.mcpb-cache/`, nested `*.plugin`, `COUNCIL.md`,
+  `eval-viewer-iter*.html`) appear in the archive's entry list. The
+  check skips gracefully when no `dist/*.plugin` exists — the
+  `/tmp`-only delivery path is still valid. Would have caught the
+  historical `.mcpb-cache/` leak (0.3.x) structurally.
+- **Layer 3: "delivery end-to-end" promoted to first-class axis.**
+  The audit brief in `references/plugin-eval.md` previously treated
+  distribution as a one-line "distribution story coherence" bullet.
+  0.6.2 proved that a single delivery change can touch SKILL.md
+  Step 4, Layer 1 allowlist, CHANGELOG, `.gitignore`, and the
+  archive-on-disk *simultaneously* — any one of them going
+  out-of-sync leaves a silent crack. The brief now spells out six
+  explicit questions the audit subagent must answer on this axis so
+  the check is reproducible instead of depending on the subagent's
+  framing.
+- **Defect-injection verification.** Each new Layer 1 assertion was
+  verified by introducing its target defect in a tempdir copy
+  (per the 0.6.2 tempdir-injection pattern), observing the FAIL,
+  removing the copy, and observing the PASS on the clean tree. Both
+  new assertions behave as designed.
+
+## 0.6.2 — 2026-04-22
+
+Pure Layer-1 hardening release — four self-optimisation proposals
+surfaced by the 0.6.1 Layer 3 audit and the 0.6.1 delivery incident
+promoted into deterministic assertions and codified docs. No skill
+content changes; no Layer 2 grader changes; no user-visible
+behaviour changes.
+
+- **Layer 1: `plugin.json` must end with a newline.** The POSIX
+  line-ending convention is not strictly JSON-required, but the file
+  has silently lost its trailing newline twice in recent cycles
+  (0.6.0 and 0.6.1), producing noisy cross-editor diffs on every
+  subsequent save. The check reads the file as bytes and FAILs if
+  the last byte is not `\n`. Negligible cost; removes a recurring
+  distraction.
+- **Layer 1: README version reference must match `plugin.json`.**
+  The version reference in the plugin README (the backtick-wrapped
+  `X.Y.Z` tokens) is a documented part of the release procedure and
+  was silently drifting from the canonical version in `plugin.json`.
+  The check extracts every `` `X.Y.Z` `` token from `plugin/README.md`
+  and FAILs if any differs from the `plugin.json` version. Fires only
+  when a version is parsed, so it gracefully skips on malformed JSON.
+- **Layer 1: `dist/` is the official delivery transition zone.**
+  During the 0.6.1 release the `/tmp`-only delivery pattern proved
+  un-savable from Cowork's file browser on the user's machine. The
+  ad-hoc fix (copy the archive to `dist/` inside the repo) worked for
+  the user but broke the runtime-artefact sweep. 0.6.2 resolves the
+  tension structurally: the repo-root sweep now allowlists
+  `dist/*.plugin` files, and a second assertion
+  (`dist/ contains only *.plugin files …`) FAILs on anything else
+  under `dist/` (wrong extension, nested directory). `*.plugin` is
+  already repo-wide gitignored, so the staging copy never reaches a
+  commit. `dist/` is documented in SKILL.md Step 4 and plugin-eval.md
+  as a transition zone only — the archive's permanent home is the
+  GitHub Release asset list.
+- **Docs: defect-injection uses a tempdir, never `git checkout`.**
+  The 0.6.1 cycle nearly lost an entire release because a Layer 1
+  injection test was reverted via `git checkout` on an uncommitted
+  tree — which silently destroyed the in-flight 0.6.0 CHANGELOG entry
+  and a council frontmatter flag. The release survived only because
+  the conversation context retained enough to rebuild the deleted
+  files by hand. The governance procedure in
+  `references/plugin-eval.md` now codifies the safe pattern: copy the
+  plugin tree to `/tmp/inject-test/`, inject inside the copy, run the
+  check against the copy, `rm -rf` the copy. The source tree is never
+  touched.
+- **Defect-injection verification.** Each new Layer 1 assertion was
+  verified by introducing its target defect in a tempdir copy,
+  observing the FAIL, removing the copy, and observing the PASS on
+  the clean tree. All three new assertions behave as designed.
+
+## 0.6.1 — 2026-04-22
+
+Pure Layer-1 hardening release — four self-optimisation proposals
+surfaced by the 0.6.0 Layer 3 audit promoted into deterministic
+assertions (and one into a codified docs checklist). No skill content
+changes; no Layer 2 grader changes; no user-visible behaviour
+changes.
+
+- **Layer 1: `disable-model-invocation: true` implies
+  `user-invocable: true`.** Promoted from the Layer 3 finding where
+  `skills/council/SKILL.md` was missing `user-invocable: true` despite
+  `disable-model-invocation: true` being set. In plugin contexts the
+  flag is required to keep the slash command reachable — confirmed on
+  anthropics/claude-code issues #26251 and #22345 during Step 0 pre-
+  research. The new assertion only fires when `disable-model-
+  invocation: true` is set, so auto-triggering skills (Pattern 1 and
+  Pattern 3) correctly skip the check.
+- **Layer 1: mid-sentence-truncation heuristic extended to
+  `CHANGELOG.md`.** The heuristic that already protected `README.md`
+  and `SKILL.md` missed a silent truncation in the `0.4.0` entry
+  (`- \`README.md\` rebuilt: th`) that survived two release cycles.
+  The heuristic is trivially reusable on `CHANGELOG.md`; this closes
+  the gap.
+- **Layer 1: recursive `*.plugin` sweep at the repo root.** The
+  runtime-artefact sweep walked the plugin tree recursively but the
+  repo-root pass used `iterdir()` (shallow). A build artefact dropped
+  into e.g. `dist/foo.plugin` was silently accepted. Switched to
+  `rglob` with a short allowlist of infra dirs (`.git`,
+  `node_modules`, `.venv`, `venv`, `__pycache__`). The plugin tree
+  itself is still walked by the first sweep, not double-visited.
+- **Docs: codified Layer 3 audit brief.** The ad-hoc audit prompt
+  used in 0.6.0 caught four real findings but was not reproducible
+  between runs. `references/plugin-eval.md` now ships an explicit
+  seven-category checklist (forward-facing references, cross-document
+  consistency, version consistency, CI workflow paths, distribution
+  story coherence, pattern conformance, file truncation) and a fixed
+  reporting format — so future audit subagents and human reviewers
+  start from the same contract.
+- **Defect-injection verification.** Each new Layer 1 assertion was
+  verified by introducing its target defect, observing the FAIL,
+  reverting, and observing the PASS. All three new assertions behave
+  as designed.
+- **Layer 3 MINOR — grader-count drift.** The 0.6.1 audit found both
+  `README.md` (claimed 33) and `plugin/README.md` (claimed 44)
+  disagreed with the council grader's actual site count (~48). Fixed
+  by replacing the brittle number with a hedge — "counts drift as
+  skills iterate; the binding number is always whatever the grader
+  script actually asserts." This removes a maintenance burden no one
+  was going to reliably keep up with.
+
+## 0.6.0 — 2026-04-22
+
+Skill rename `pdf-umbenennen` → `rename-pdf` and introduction of a
+third legal invocation pattern (**Auto + Command**). Bundled as a
+minor release because the rename changes a user-visible identifier
+and the standard is extended to document the new pattern.
+
+- **Skill renamed** `skills/pdf-umbenennen/` → `skills/rename-pdf/`.
+  Content is a near-verbatim port (the body was already in English;
+  the description picked up German+English trigger signals
+  explicitly). Rationale: Anthropic convention is kebab-case English
+  skill names. Anthropic does not ship an alias mechanism for skill
+  renames, so the change is hard — any agent or user still pointing
+  at `pdf-umbenennen` needs to update the reference.
+- **New command** `commands/rename-pdf.md` — the slash-command entry
+  point with an optional folder path as argument. First skill in the
+  toolkit to use **Auto + Command**: the skill auto-fires on the
+  right intent signals AND accepts an explicit `/rename-pdf [folder]`
+  invocation. Both paths are legitimate.
+- **Standard extension — three legal invocation patterns.** README,
+  SKILL_TEMPLATE, and `update-plugin/SKILL.md` now document: Pattern
+  1 — Auto-only (default); Pattern 2 — Command-only (with
+  `disable-model-invocation: true` + paired command, as in
+  `/council` and `/update-plugin`); Pattern 3 — Auto + Command (new;
+  as in `rename-pdf`).
+- **Layer 1 relaxation** — the commands↔skills pairing assertion
+  previously required every command's paired skill to be non-auto,
+  which implicitly forbade Pattern 3. The forward direction now only
+  requires a paired skill (any auto status); the reverse direction —
+  every non-auto skill must have a paired command, otherwise it is
+  unreachable in Claude Code / Cowork — stays.
+- **Layer 2 grader ported** — `skills/rename-pdf/scripts/grade.py`.
+  CI workflow updated to point at it.
+- **Skill-creator iteration 1** ran with 4 evals × 2 configurations
+  (new rename-pdf vs. snapshotted pdf-umbenennen). 22/22 assertions
+  pass on both sides; no regression, slash-command path verified
+  end-to-end.
+- **Migration traces** — stale references to `pdf-umbenennen` and
+  `neomint-plugin-entwicklung` cleaned up across root README, CI
+  workflow, ISSUE_TEMPLATE, and `update-plugin/evals/evals.json`.
+- **Layer 3 remediation** — three findings from the unprimed audit
+  fixed in the same cycle: (a) the plugin `README.md` install section
+  now points at the GitHub Releases page instead of claiming
+  `.plugin` files sit in the `plugin/` directory (they don't —
+  `.gitignore` blocks them and they ship as release assets); (b)
+  `skills/council/SKILL.md` gains the `user-invocable: true` flag
+  next to `disable-model-invocation: true` so the companion
+  `/council` slash-command remains reachable; (c) the closing bullet
+  of the `0.4.0` entry in this changelog had been silently truncated
+  mid-word (`- \`README.md\` rebuilt: th`) since the original rebuild
+  — it is now completed. The gaps that let (b) and (c) survive are
+  closed by the Layer 1 assertions that land in 0.6.1.
+
+## 0.5.11 — 2026-04-21
+
+Architectural cleanup of the governance contract — runtime artefacts
+are now banned from the plugin source tree and the repo root, and
+the shipping `.plugin` archive is no longer committed. Distribution
+moves to GitHub Releases.
+
+- **Removed** the old `neomint-plugin-entwicklung` skill (superseded
+  by `update-plugin` in 0.5.10). All documented references migrated.
+- **Removed** the committed `plugin/neomint-toolkit.plugin` archive
+  and the repo-root `COUNCIL.md` runtime log.
+- **Standard expansion** — `update-plugin/SKILL.md` and
+  `references/plugin-eval.md` now codify the workspace-and-artefact
+  rule: every runtime output (eval runs, snapshots, eval-viewer HTML,
+  plugin-check reports, intermediate zips, the shipping archive
+  itself) lives in `/tmp/<plugin-name>-workspace/`. Nothing in the
+  source tree.
+- **Layer 1 hardening (`plugin-check.py`)** — new assertion *No
+  runtime artefacts in plugin tree or repo root* sweeps for
+  `*.plugin`, `*-workspace/`, `iteration-workspace/`,
+  `skill-snapshot/`, `eval-viewer-iter*.html`, and `COUNCIL.md`.
+- **Repackaging procedure** rewritten in `update-plugin/SKILL.md`
+  Step 4: build under `/tmp/<plugin-name>-workspace/src/`, zip into
+  `/tmp/<plugin-name>-workspace/<plugin-name>.plugin`, deliver via a
+  `computer://` link, never copy back into the repo or the workspace
+  folder.
+- **CI workflow** updated: `.github/workflows/plugin-check.yml` now
+  invokes `plugin/skills/update-plugin/scripts/plugin-check.py`.
+- **`.gitignore` rewritten** — ignores `*.plugin`, `*-workspace/`,
+  `iteration-workspace/`, `skill-snapshot/`, `eval-viewer-iter*.html`,
+  and `COUNCIL.md`.
+- **plugin-check report path** now defaults to
+  `/tmp/<plugin-name>-workspace/plugin-check/report.json` so multiple
+  users on a shared machine don't collide on `/tmp`.
+
 ## 0.5.10 — 2026-04-22
 
 New explicit-invocation governance skill `update-plugin` added alongside
@@ -821,4 +1266,4 @@ nachgelagerten Operationalisierung in
 - Initial plugin recovery and repackaging
 - Skill `pdf-umbenennen`: automatically renames scanned PDFs based on document content (date, sender, subject)
 - Author changed to NeoMINT GmbH
-- Sensitive examples removed from skill
+- Sensitive examples removed from skill.

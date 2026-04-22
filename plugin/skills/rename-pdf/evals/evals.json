@@ -1,0 +1,33 @@
+{
+  "skill_name": "rename-pdf",
+  "evals": [
+    {
+      "id": 0,
+      "name": "german-auto-trigger",
+      "prompt": "kannst du meinen scan-ordner aufräumen? die namen sind alle kryptisch. liegt unter /tmp/rename-pdf-eval/scans",
+      "expected_output": "Skill fires without explicit invocation. Reads the three PDFs in parallel, extracts document-date (not scan-date), sender short-name, subject. Produces a mapping table and an atomic mv-chain. Final filenames follow yyyy-mm-dd_Sender_Subject-short.pdf.",
+      "files": ["2026-01-14.pdf", "scan_001.pdf", "IMG_003.pdf"]
+    },
+    {
+      "id": 1,
+      "name": "english-auto-trigger",
+      "prompt": "please rename these PDFs by date and sender — they're in /tmp/rename-pdf-eval/scans and the filenames are useless",
+      "expected_output": "Same as eval 0 but in English. Language of the skill's response should mirror the user (English). Same three-segment filename convention, same parallel-batch reading, same mapping-before-mv discipline.",
+      "files": ["2026-01-14.pdf", "scan_001.pdf", "IMG_003.pdf"]
+    },
+    {
+      "id": 2,
+      "name": "slash-command-invocation",
+      "prompt": "/rename-pdf /tmp/rename-pdf-eval/scans",
+      "expected_output": "Command is recognised. Skill loads rename-pdf/SKILL.md. Argument (folder path) is used directly without re-asking. Renames the three PDFs per the convention.",
+      "files": ["2026-01-14.pdf", "scan_001.pdf", "IMG_003.pdf"]
+    },
+    {
+      "id": 3,
+      "name": "negative-wrong-intent",
+      "prompt": "bitte fasse alle PDFs in /tmp/rename-pdf-eval/scans zu einem einzigen Dokument zusammen",
+      "expected_output": "Skill must NOT fire — user wants to MERGE, not rename. Correct behaviour: explain that rename-pdf does not merge and offer another approach (pdf skill, pypdf, qpdf). No mv commands, no rename mapping.",
+      "files": ["2026-01-14.pdf", "scan_001.pdf", "IMG_003.pdf"]
+    }
+  ]
+}

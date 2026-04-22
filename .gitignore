@@ -29,41 +29,20 @@ evals/cache/
 
 # Build artefacts
 # ---------------
-# The canonical shipping artefact lives at plugin/neomint-toolkit.plugin
-# and IS committed so users can install directly from a checkout.
-# Everything else — /tmp build scratch directories, versioned release
-# bundles that accumulate during iteration, test/throwaway bundles at
-# the repo root — stays out of git. Old versions are reachable via git
-# tags and GitHub Releases, not by leaving files in the tree.
-/tmp/
-/pluginbuild/
-/neomint-toolkit-*.plugin
-/*.plugin
-!plugin/neomint-toolkit.plugin
+# Shipping artefacts live on GitHub Releases, not in the repo.
+# *.plugin archives are built on demand in /tmp and uploaded there.
+# Nothing named *.plugin should ever live inside the repo.
+*.plugin
 
-# Skill runtime state
-# -------------------
-# Files the plugin's own skills write into the working directory when
-# they are exercised. When the working directory happens to be this
-# repository (which is the case when we dogfood the plugin on itself),
-# these land at the repo root. None of them belong in git — they are
-# per-workspace memory, per-run caches, or iteration output.
-#
-# council:
-/COUNCIL.md
-/COUNCIL-*.md
-/GROUNDING-CACHE.md
-/council-*.html
-/council-*.md
-#
-# skill-creator iteration + governance grader output:
-/ITERATION_REPORT.md
-/eval_metadata.json
-/skill-creator-*/
-/plugin-check-report.json
-/eval-*.html
-/iteration-workspace/
-#
-# pdf-umbenennen has no runtime state files (it only renames inputs in
-# place), so nothing needed here. If a future skill adds runtime
-# state, extend this block rather than inventing a new one.
+# Runtime / iteration workspaces
+# -------------------------------
+# The update-plugin pipeline (and any skill that needs scratch space)
+# writes into /tmp/<plugin-name>-workspace/. Never into the repo.
+# These names are listed here defensively in case something ever lands.
+*-workspace/
+iteration-workspace/
+skill-snapshot/
+eval-viewer-iter*.html
+
+# Session logs / runtime notes that are not source
+COUNCIL.md

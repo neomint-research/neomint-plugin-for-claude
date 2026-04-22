@@ -71,8 +71,21 @@ jobs:
           fi
 
       - name: Run plugin-check (Layer 1 + 2)
+        # --strict-release asserts the repo's dist/ is empty before we cut
+        # a release. dist/ is the documented Cowork-fallback staging zone
+        # (see SKILL.md Step 4); a stale archive sitting there at release
+        # time means a previous release was never properly closed out, and
+        # the version-drift check would silently succeed against the OLD
+        # archive's version because we just bumped plugin.json.
+        # --verbose surfaces per-grader Layer 2 assertion counts in the
+        # CI log so a regression in any grader's instrumentation is
+        # visible at a glance.
+        # --count-strict (0.6.6) turns the per-grader floors in
+        # LAYER2_GRADER_FLOORS into hard gates so a release cannot
+        # publish when any grader has fallen below its floor — closing
+        # the loop the verbose log already exposed.
         run: |
-          python3 plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py plugin
+          python3 plugin/skills/update-plugin/scripts/plugin-check.py plugin --strict-release --verbose --count-strict
 
       - name: Build canonical .plugin archive
         run: |
@@ -80,9 +93,9 @@ jobs:
           rm -f neomint-toolkit.plugin
           python3 <<'PY'
           import zipfile, os, fnmatch
-          EXCLUDE_DIRS = {'.git', '.github', '.mcpb-cache', 'evals'}
+          EXCLUDE_DIRS = {'.git', '.github', '.mcpb-cache', 'evals', '__pycache__'}
           EXCLUDE_NAMES = {'CONTRIBUTING.md', '.DS_Store'}
-          EXCLUDE_GLOBS = ['*.plugin']
+          EXCLUDE_GLOBS = ['*.plugin', '*.pyc']
           def skip(name, is_dir):
               if name in EXCLUDE_DIRS: return True
               if is_dir: return False

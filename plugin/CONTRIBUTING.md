@@ -4,7 +4,7 @@ Thank you for wanting to contribute. This document describes how changes land in
 
 ## Ground rules
 
-1. **The `neomint-plugin-entwicklung` skill governs every change.** New skill, skill modification, standard update, repackage — all of it runs through that skill. If you are using Claude Code or Cowork with this plugin installed, the skill is invoked automatically when you describe your change. If you are editing by hand, read `skills/neomint-plugin-entwicklung/SKILL.md` first and follow it manually.
+1. **The `update-plugin` skill governs every change.** New skill, skill modification, standard update, repackage — all of it runs through that skill. If you are using Claude Code or Cowork with this plugin installed, invoke it explicitly with `/update-plugin [what you want to change]`. In Claude AI (Web), where slash commands are unavailable, the skill's pushy description triggers the same contract when you describe your change.
 2. **The `skill-creator` skill is mandatory for content changes.** Every creation or content change of a skill goes through Anthropic's official `skill-creator` skill. Direct edits to a `SKILL.md` file without the skill-creator workflow violate the plugin standard. The only exceptions are pure metadata changes (name, version number in `plugin.json`) or comment-only edits.
 3. **Ground-Before-Discuss.** Before proposing a change, state what Anthropic's current guidance says (Anthropic GitHub — `anthropics/skills`, `anthropics/claude-plugins-official`, `anthropics/claude-code` — is the primary source) and what the community consensus is, with sources. Anthropic wins on conflict. "I just think this would be better" is not a valid opener.
 
@@ -26,11 +26,11 @@ If the change is to a `SKILL.md`, invoke `skill-creator`. It guides you through 
 
 The loop is how we know the plugin is actually consistent, not just consistent-according-to-the-person-who-made-the-change.
 
-**Layer 1 — structural assertions.** Run `python3 skills/neomint-plugin-entwicklung/scripts/plugin-check.py` from the plugin root. It verifies plugin.json integrity, version consistency across plugin.json / README / CHANGELOG, SKILL.md block completeness (Language block, Environment block, Web fallback, description with triggers and negative scope), shared-file presence, reference coverage, root-file whitelist, and shipping-archive cleanliness.
+**Layer 1 — structural assertions.** Run `python3 skills/update-plugin/scripts/plugin-check.py` from the plugin root. It verifies plugin.json integrity, version consistency across plugin.json / README / CHANGELOG, SKILL.md block completeness (Language block, Environment block, Web fallback, description with triggers and negative scope), shared-file presence, reference coverage, root-file whitelist, runtime-artefact sweep (nothing of the form `*.plugin`, `*-workspace/`, `iteration-workspace/`, etc. in the tree), and the commands↔skills pairing in all three legal patterns.
 
 **Layer 2 — per-skill graders.** Each skill may ship a `scripts/grade.py` that encodes its own contract (e.g. the council grader enforces all five phases, the Ground-Before-Discuss wording, the two-track output format, and the anti-pattern list). If you change a skill, its grader must pass. If you add a new capability, add a grader assertion for it in the same change.
 
-**Layer 3 — unprimed audit.** Before packaging, a subagent with no context from the change reads the delta and returns `SHIP` or `HOLD` with named defects. If `HOLD`: fix the defects or, if the auditor identified a category of defect the assertion set doesn't catch, promote that category into a new Layer 1 or Layer 2 assertion so the next change can't regress.
+**Layer 3 — unprimed audit.** Before packaging, a subagent with no context from the change reads the delta and returns a findings list with severity labels. If there are BLOCKER or MAJOR findings: fix the defects or, if the auditor identified a category of defect the assertion set doesn't catch, promote that category into a new Layer 1 or Layer 2 assertion so the next change can't regress.
 
 The loop closes only when all three layers pass in one complete pass. If Layer 3 flags something new, Layer 1 or Layer 2 grows by one assertion — this is how the standard improves.
 
@@ -45,15 +45,19 @@ Every change must:
 - add a top entry to `CHANGELOG.md` (newest on top, succinct, names the observable effect),
 - update the version reference in `README.md`.
 
-### 6. Repackage
+### 6. Workspace and artefacts
 
-After all layers pass, build the shipping archive from a clean copy of the plugin tree. **Do not zip from the plugin root while there is a pre-existing `*.plugin` file present** — `zip -r` appends to existing archives, so always remove the target first, and always zip from a clean copy so no sibling directories leak in.
+All runtime output from the iteration loop — intermediate zips, extracted source trees, grader JSON reports, snapshots, eval-viewer HTML, the shipping archive itself — lives in `/tmp/<plugin-name>-workspace/` and never in the source tree. Layer 1's runtime-artefact sweep blocks any file matching `*.plugin`, `*-workspace/`, `iteration-workspace/`, `skill-snapshot/`, `eval-viewer-iter*.html`, `COUNCIL.md`, or `plugin-check-report.json` anywhere inside the repo.
 
-From the plugin root:
+The shipping `.plugin` archive is **not** committed. It is rebuilt by CI when a tag is pushed (see the next step) and attached to the corresponding GitHub Release as an asset.
+
+If you want to build a local copy for testing, use the workspace directory:
 
 ```bash
-rm -f neomint-toolkit.plugin
-zip -r neomint-toolkit.plugin . \
+mkdir -p /tmp/neomint-toolkit-workspace/src
+cp -r plugin/* /tmp/neomint-toolkit-workspace/src/
+cd /tmp/neomint-toolkit-workspace/src
+zip -r /tmp/neomint-toolkit-workspace/neomint-toolkit.plugin . \
   -x "*.git*" \
   -x "*.github/*" \
   -x "CONTRIBUTING.md" \
@@ -63,28 +67,26 @@ zip -r neomint-toolkit.plugin . \
   -x "*.plugin"
 ```
 
-`LICENSE` and `SECURITY.md` are intentionally **included** in the shipping archive: installed users should see the license terms and the security-reporting policy without having to visit the GitHub repository. `CONTRIBUTING.md` and `.github/` are intentionally **excluded** — they are only relevant to people working on the repository itself. This split is enforced by the `never_shipped` set in `skills/neomint-plugin-entwicklung/scripts/plugin-check.py`; if you change the zip exclusion list, update that set too.
-
-After packaging, run Layer 1 again. The `Shipping archive contents are clean` assertion verifies nothing snuck in.
+`LICENSE` and `SECURITY.md` are intentionally **included** in the shipping archive: installed users should see the license terms and the security-reporting policy without having to visit the GitHub repository. `CONTRIBUTING.md` and `.github/` are intentionally **excluded** — they are only relevant to people working on the repository itself. This split is enforced by the `never_shipped` set in `skills/update-plugin/scripts/plugin-check.py`; if the exclusion list changes, that set must change too. The CI release workflow applies the same rules in Python rather than `zip -x`, but the semantics are identical.
 
 ### 7. Cut the release
 
-The canonical shipping archive lives at `plugin/neomint-toolkit.plugin` in the repository and is committed alongside the source change it corresponds to. Public releases are cut by pushing a `vX.Y.Z` git tag that matches `plugin/.claude-plugin/plugin.json`:
+Push a `vX.Y.Z` git tag that matches `plugin/.claude-plugin/plugin.json`:
 
 ```bash
-git tag v0.5.9
-git push origin v0.5.9
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
 The tag push triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
 
 1. Asserts that the tag version matches `plugin.json` and the top entry in `CHANGELOG.md`.
 2. Re-runs `plugin-check.py` (Layer 1 + Layer 2) against `plugin/`.
-3. Rebuilds the `.plugin` archive deterministically with the same exclusion rules documented above.
+3. Rebuilds the `.plugin` archive deterministically with the exclusion rules encoded in the workflow.
 4. Extracts the matching `## X.Y.Z — YYYY-MM-DD` block from `CHANGELOG.md` as release notes.
 5. Publishes a GitHub Release with the rebuilt `neomint-toolkit.plugin` attached as an asset.
 
-Older versions are reachable via their GitHub Release assets — don't keep versioned `.plugin` files in the working tree. `.gitignore` blocks `/neomint-toolkit-*.plugin` at the repo root precisely to prevent that accumulation.
+Older versions are reachable via their GitHub Release assets — don't keep versioned `.plugin` files in the working tree. `.gitignore` blocks `*.plugin` precisely to prevent that accumulation.
 
 If a tag was pushed without a corresponding plugin.json or CHANGELOG update, the workflow fails loudly. Fix the mismatch locally and force-push the tag (`git tag -f vX.Y.Z && git push origin vX.Y.Z --force`) — the release itself is idempotent.
 
@@ -101,19 +103,12 @@ If yes, propose the improvement in the same PR or a follow-up PR. Standards only
 
 - **New skills** that solve a recurring workflow and don't duplicate an existing one. Start by opening an issue describing the workflow, the trigger signals, and the negative scope (what the skill is *not* for). Issue first, then PR — it's faster than writing a skill we decline to merge.
 - **Modifications to existing skills** that sharpen triggers, close a failure mode, add a web fallback, or improve grader coverage.
-- **Plugin-standard updates** that come from a specific incident (ideally citable in the PR: "this prevents X, which happened in version Y").
-- **Pointed criticism and audit findings.** Open an issue. "The council grader has this blind spot" or "the Ground-Before-Discuss rule is underspecified for case X" are exactly the kind of feedback we want.
+- **Layer 1 / Layer 2 assertions** promoted from real Layer 3 findings — name the incident the new assertion would have caught.
+- **Standard updates** — use the `[standard]` issue template; quote the rule today, describe the problem, propose the replacement, say how it will be enforced.
 
-## What we will probably decline
+## What is out of scope
 
-- Skills that are broad grab-bags rather than one-job-done-well.
-- Pure stylistic README rewrites without a specific reading problem identified.
-- Changes that bypass `skill-creator` for content or bypass the three-layer loop for governance. We will ask you to re-do them.
-
-## Reporting issues
-
-Use the issue templates in `.github/ISSUE_TEMPLATE/`. For security issues, see [`SECURITY.md`](SECURITY.md) — please do not open public issues for vulnerabilities.
-
-## License of contributions
-
-By submitting a contribution — whether as a pull request, a patch attached to an issue, or code posted in a discussion — you agree that it is licensed under the [Apache License 2.0](LICENSE), consistent with the rest of the project. This matches the inbound-equals-outbound model used by most Apache-licensed projects on GitHub. If you cannot license your contribution under Apache 2.0 (for example, because your employer hasn't cleared it), please don't submit the contribution.
+- Changes that skip the three-layer loop.
+- Skill rewrites driven by taste rather than a named failure mode.
+- Ad-hoc edits to `SKILL.md` files without running `skill-creator`.
+- Committing build artefacts (`*.plugin`, workspaces, eval reports) into the source tree.

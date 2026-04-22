@@ -28,6 +28,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SKILL_MD = HERE.parent / "SKILL.md"
 
+# Import the shared static-analysis helper. Per-skill graders run as
+# standalone scripts, not as part of a Python package, so we have to
+# manually extend sys.path before the import. The helper lives one
+# level up under `_shared/` (introduced in 0.6.6 / P18).
+sys.path.insert(0, str(HERE.parent.parent / "_shared"))
+from grader_utils import count_failure_sites  # noqa: E402
+
 
 def load() -> str:
     if not SKILL_MD.exists():
@@ -40,10 +47,27 @@ def contains_all(text: str, needles: list[str]) -> list[str]:
     return [n for n in needles if n not in text]
 
 
+def _self_check_count() -> int:
+    """Count distinct assertion sites in this grader by static analysis.
+
+    Added in 0.6.4 (P12) so the grader self-reports its contract size.
+    Extracted to `_shared/grader_utils.py` in 0.6.6 (P18) — this
+    wrapper now just delegates to the shared helper so future graders
+    can adopt the pattern without copy-pasting the implementation.
+    """
+    return count_failure_sites(Path(__file__))
+
+
 def main() -> int:
+    # --count-only returns just the assertion count (P12).
+    if len(sys.argv) > 1 and sys.argv[1] == "--count-only":
+        print(_self_check_count())
+        return 0
+
     text = load()
     lower = text.lower()
     failures: list[str] = []
+    check_count = _self_check_count()
 
     # ------------------------------------------------------------------
     # A. Identity and loadability
@@ -533,11 +557,11 @@ def main() -> int:
     # ------------------------------------------------------------------
 
     if failures:
-        print("FAIL council grader:")
+        print(f"FAIL council grader ({len(failures)}/{check_count} failed):")
         for f in failures:
             print(f"  - {f}")
         return 1
-    print("PASS council grader — streamlined-contract checks")
+    print(f"PASS council grader — streamlined-contract ({check_count} checks)")
     return 0
 
 

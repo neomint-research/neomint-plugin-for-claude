@@ -6,9 +6,20 @@ on:
   push:
     branches: [main]
 
+# Governance model: Layer 1 is the structural foundation. If it fails,
+# Layer 2 grader output on top of broken structure is noise, so Layer 2
+# is gated on Layer 1 succeeding. Each Layer 2 grader runs as a separate
+# matrix job so:
+#   1. Failures are attributable at a glance — the PR check UI shows
+#      "Layer 2 (council) FAIL" rather than a single mixed step,
+#   2. Graders run in parallel rather than serially,
+#   3. Adding a new skill grader is a single-line matrix entry, not a
+#      copy-pasted shell block.
+# (P19, 0.6.6)
+
 jobs:
-  layer-1-and-2:
-    name: Layer 1 structural + Layer 2 graders
+  layer-1:
+    name: Layer 1 structural + counts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,36 +30,45 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Governance model: Layer 1 is the structural foundation. If Layer 1
-      # fails, Layer 2 grader output on top of broken structure is noise,
-      # so we fail-fast rather than report mixed signals. A missing per-
-      # skill grader is not a failure — it's an optional mechanism — so
-      # each grader step is conditional on its script existing on disk.
-
-      - name: Layer 1 — plugin-check
+      - name: Layer 1 — plugin-check (verbose + count-strict)
+        # --verbose (0.6.5) prints per-grader assertion counts in the CI
+        # log so silent grader-instrumentation drift is visible.
+        # --count-strict (0.6.6) turns the per-grader floors in
+        # LAYER2_GRADER_FLOORS into hard gates — a grader that loses
+        # checks fails the build instead of just looking different in
+        # the log. Combined, the two flags are the contract that lives
+        # outside any one grader's source.
         run: |
-          python3 plugin/skills/neomint-plugin-entwicklung/scripts/plugin-check.py plugin
+          python3 plugin/skills/update-plugin/scripts/plugin-check.py plugin --verbose --count-strict
 
-      - name: Layer 2 — council grader
+  layer-2:
+    name: "Layer 2 (${{ matrix.skill }})"
+    needs: layer-1
+    runs-on: ubuntu-latest
+    strategy:
+      # fail-fast: false means a council failure does not cancel the
+      # rename-pdf and update-plugin runs — we want to see every
+      # grader's verdict in the same PR, not just the first one to fail.
+      fail-fast: false
+      matrix:
+        # Adding a new per-skill grader: append the skill name here.
+        # The job is conditional on the grader script existing, so an
+        # entry without a grader is a no-op rather than a failure.
+        skill: [council, rename-pdf, update-plugin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run grader
         run: |
-          if [ -f plugin/skills/council/scripts/grade.py ]; then
-            python3 plugin/skills/council/scripts/grade.py
+          GRADER="plugin/skills/${{ matrix.skill }}/scripts/grade.py"
+          if [ -f "$GRADER" ]; then
+            python3 "$GRADER"
           else
-            echo "no council grader — skipping"
-          fi
-
-      - name: Layer 2 — pdf-umbenennen grader
-        run: |
-          if [ -f plugin/skills/pdf-umbenennen/scripts/grade.py ]; then
-            python3 plugin/skills/pdf-umbenennen/scripts/grade.py
-          else
-            echo "no pdf-umbenennen grader — skipping"
-          fi
-
-      - name: Layer 2 — neomint-plugin-entwicklung grader
-        run: |
-          if [ -f plugin/skills/neomint-plugin-entwicklung/scripts/grade.py ]; then
-            python3 plugin/skills/neomint-plugin-entwicklung/scripts/grade.py
-          else
-            echo "no neomint-plugin-entwicklung grader — skipping"
+            echo "no grader at $GRADER — matrix entry is a no-op"
           fi

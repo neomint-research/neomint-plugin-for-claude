@@ -1,6 +1,7 @@
 ---
 name: council
 disable-model-invocation: true
+user-invocable: true
 description: >
   You're too close to it. Use when the user needs judgment on a consequential
   choice, a plan they're about to commit to, or a decision that touches
