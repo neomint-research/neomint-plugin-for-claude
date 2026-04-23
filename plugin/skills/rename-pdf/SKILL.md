@@ -1,5 +1,6 @@
 ---
 name: rename-pdf
+user-invocable: true
 description: >
   Renames PDF documents in a folder automatically based on their content — date, sender,
   and subject — following the convention yyyy-mm-dd_Sender_Subject-short.pdf. Use this

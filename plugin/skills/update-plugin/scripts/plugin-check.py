@@ -675,6 +675,24 @@ def run_layer1(root: Path, rep: Report, strict_release: bool = False) -> None:
                 "_shared/language.md" in text)
         rep.add(f"[{name}] references _shared/environments.md", 1,
                 "_shared/environments.md" in text)
+        # Canonical section headings for the shared blocks. Promoted to Layer 1
+        # after a Layer 3 audit (0.6.11) found that referencing the _shared files
+        # inline (without a dedicated heading) satisfies the reference check but
+        # breaks the structural contract that SKILL_TEMPLATE.md defines: both
+        # blocks must appear as their own ## sections so progressive-disclosure
+        # tooling and human reviewers can locate them reliably.
+        rep.add(
+            f"[{name}] has '## Language' section",
+            1,
+            re.search(r"(?m)^## Language\s*$", text) is not None,
+            "SKILL.md must have a dedicated '## Language' heading (not just inline prose)",
+        )
+        rep.add(
+            f"[{name}] has '## Environment detection' section",
+            1,
+            re.search(r"(?m)^## Environment detection\s*$", text) is not None,
+            "SKILL.md must have a dedicated '## Environment detection' heading",
+        )
         rep.add(f"[{name}] SKILL.md not mid-sentence truncated", 1,
                 _ends_well(_tail_line(skill_md)), _tail_line(skill_md)[:80])
         # Required-block check: every SKILL.md must declare the two canonical
@@ -838,6 +856,57 @@ def run_layer1(root: Path, rep: Report, strict_release: bool = False) -> None:
             else f"missing commands/{skill_name}.md — skill would be unreachable in Claude Code / Cowork",
         )
 
+    # --- commands/ frontmatter check (added 0.6.12) ---
+    # Defect pattern: commands/session-docs.md was the only command file without
+    # YAML frontmatter (---\ndescription: ...\n---) and in German — caught by
+    # Layer 3 but not Layer 1. Every command file must have a YAML block with
+    # at least a `description` field so the plugin's command definition layer
+    # can parse it and present meaningful autocomplete text.
+    for cmd_name, cmd_path in sorted(commands.items()):
+        try:
+            cmd_text = cmd_path.read_text()
+        except Exception:
+            cmd_text = ""
+        has_fm = bool(re.match(r"---\s*\n", cmd_text))
+        cmd_fm = _yaml_frontmatter(cmd_path)
+        has_desc = bool(cmd_fm and cmd_fm.get("description"))
+        rep.add(
+            f"commands/{cmd_name}.md has YAML frontmatter",
+            1,
+            has_fm,
+            "ok" if has_fm else "missing opening '---' block",
+        )
+        rep.add(
+            f"commands/{cmd_name}.md frontmatter has description",
+            1,
+            has_desc,
+            "ok" if has_desc else "description field missing or empty",
+        )
+
+    # --- user-invocable: true for every paired skill (Pattern 2 + 3, added 0.6.12) ---
+    # Defect pattern: skills/rename-pdf/SKILL.md (Pattern 3, paired with
+    # commands/rename-pdf.md) was missing user-invocable: true — caught by
+    # Layer 3 but not Layer 1. The existing assertion only checks Pattern 2
+    # (disable-model-invocation: true → user-invocable: true). This extends
+    # the check to Pattern 3: any skill that has a paired command file must
+    # carry user-invocable: true so the slash command remains reachable in
+    # Claude Code / Cowork regardless of the invocation-model flag.
+    for cmd_name in sorted(commands):
+        paired_skill_md = skills_dir / cmd_name / "SKILL.md"
+        if not paired_skill_md.exists():
+            continue  # already reported by forward-direction check above
+        fm = _yaml_frontmatter(paired_skill_md)
+        if fm is None:
+            continue  # already reported by frontmatter-parses check above
+        uinv = fm.get("user-invocable", "").strip().lower() == "true"
+        rep.add(
+            f"[{cmd_name}] paired skill has user-invocable: true",
+            1,
+            uinv,
+            "ok" if uinv
+            else "missing user-invocable: true — slash command may be unreachable in Claude Code / Cowork",
+        )
+
 
 # -----------------------------------------------------------------------------
 # Layer 2 — per-skill evals
@@ -884,7 +953,9 @@ def run_layer2(root: Path, rep: Report) -> None:
 LAYER2_GRADER_FLOORS: dict[str, int] = {
     "council": 48,
     "rename-pdf": 16,
+    "session-docs": 21,
     "update-plugin": 14,
+    "video-preview": 6,
 }
 
 

@@ -5,12 +5,6 @@ argument-hint: "[question or topic]"
 
 # /council
 
-**Output language:** respond in the language the user wrote in. German
-in → German out, English in → English out. If the user has set an
-explicit language preference earlier in the conversation, respect that
-instead. This rule applies from the very first sentence of T1, before
-any skill file is read. (Full rule: `skills/_shared/language.md`.)
-
 The user has invoked the Council. Run it exactly as specified in the
 council skill — the skill carries the full contract (seven turns, one per
 assistant message; Grounding in T1; five MECE roles in T2–T6; adaptive

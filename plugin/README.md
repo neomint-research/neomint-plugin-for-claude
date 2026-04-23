@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.6.7` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.6.15` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -18,7 +18,7 @@ Download the latest `neomint-toolkit.plugin` file from the project's [GitHub Rel
 
 ## What's inside
 
-Three skills, each opt-in, each scoped to one job.
+Five skills, each opt-in, each scoped to one job. Four are paired with a `/skill-name` slash command (Pattern 2 or 3); `video-preview` is Pattern 1 (auto-trigger only, no command).
 
 ### `council`
 
@@ -31,6 +31,31 @@ It runs as a **live, turn-gated deliberation**: one turn per assistant message (
 ### `rename-pdf`
 
 Renames scanned PDF documents based on their content — date, sender, subject — following `yyyy-mm-dd_Sender_Subject-short.pdf`. Reads files in parallel batches. Triggers on phrases like "rename scans", "clean up ScanSnap folder", "name files by date and sender" in either English or German. Also runs via the `/rename-pdf [folder]` command for direct argumented use — an example of the **Auto + Command** pattern (see *Invocation patterns* below). Previously shipped as pdf-umbenennen (German name); renamed in 0.6.0 so the skill's identifier follows Anthropic's English-by-default convention.
+
+### `session-docs`
+
+Auto-trigger skill that keeps all project documentation in sync throughout
+a work session. Reads at session start (MEMORY.md → KNOWN_ISSUES.md →
+HANDOVER.md → task list), writes immediately after new findings — no
+"remember to update at the end" discipline required. Four update triggers,
+each scoped to the right documentation location: CI/tool results → KNOWN_ISSUES,
+direction changes → HANDOVER, user corrections → Memory, work steps → task list.
+Creates missing files from bundled templates. Also responds to explicit calls:
+"session abschliessen", "übergabe vorbereiten", "aufräumen".
+
+### `video-preview`
+
+Turns a website, web app, dashboard, or static HTML/CSS page into a compressed
+MP4 preview video using Puppeteer (headless Chromium) and ffmpeg. Default output:
+1080×1920 (9:16 portrait), H.264, optimised for Signal, WhatsApp, Slack, or email.
+Three interaction patterns: scroll-through (page from top to bottom), click-demo
+(defined sequence of selectors to click, with frame capture between each action),
+and highlight-zoom (CSS transform zoom into a specific element). Output naming
+follows `yyyy-mm-dd_description_preview.mp4`. Automatically detects missing
+Puppeteer or ffmpeg and gives install instructions; in Claude AI (Web), delivers
+a ready-to-run `record.js`, `stitch.sh`, and `README.md` instead of executing
+directly. Triggers on phrases like "make a preview video", "record the page",
+"zeig das als Clip", or "ich will das schnell teilen können".
 
 ### `update-plugin`
 
@@ -97,6 +122,10 @@ Layer 1 enforces the pairing:
 ### Required blocks in every SKILL.md
 
 YAML frontmatter with `name` and a **pushy** `description` that includes trigger signals and negative scope (what the skill is *not* for). A `## Language` block referencing `../_shared/language.md`. An `## Environment detection` block referencing `../_shared/environments.md`. A `## Procedure with file access (Claude Code & Cowork)` section. A `## Procedure in Claude AI (Web)` section defining the web fallback. An optional `## Additional references` section listing `references/*.md`.
+
+### Required blocks in every `commands/*.md`
+
+YAML frontmatter (between `---` markers) with at least a `description` field. An optional `argument-hint` field for autocomplete. Layer 1 enforces the presence of frontmatter on every command file.
 
 ### Output language
 

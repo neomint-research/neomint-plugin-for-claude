@@ -1,0 +1,23 @@
+{
+  "skill_name": "video-preview",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Ich möchte ein kurzes Video von https://app.neomint.com machen — zeig zuerst das Dashboard, dann klick auf 'Projekte' in der Navigation, dann scroll runter zur Tabelle. 9:16, für Signal.",
+      "expected_output": "Claude schreibt ein vollständiges record.js-Script mit Puppeteer (Viewport 1080x1920, click-demo Sequenz: Dashboard → Projekte → scroll), plus den ffmpeg-Befehl mit -movflags +faststart und passendem output-Dateinamen. Wenn Bash verfügbar: Script ausführen und .mp4 liefern. Wenn nicht: alle drei Dateien (record.js, stitch.sh, README) als Code.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Kannst du mir einen Preview-Clip von meiner lokalen index.html machen? Die liegt unter /Users/skr/projects/neomint-landing/index.html. Ich will einfach nur dass die Seite von oben nach unten durchgescrollt wird, so 20 Sekunden lang.",
+      "expected_output": "Claude erkennt lokale Datei (file:// Pfad), schreibt Scroll-Through-Pattern aus den Puppeteer-Patterns, berechnet Steps für ~20s bei 10fps (200 frames), ffmpeg-Output passend benannt. Warnt bei relativen Asset-Pfaden und schlägt 'npx serve' vor.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I need a quick demo video of our analytics dashboard at http://localhost:3000/analytics — just show the main KPI cards and then click into the revenue chart. Keep it under 15 seconds. Output for Signal.",
+      "expected_output": "Antwortet auf Englisch (User schreibt Englisch). Schreibt click-demo Script mit korrektem localhost-URL, ~150 Frames für 15s, click-Sequenz auf KPI-Bereich und Revenue-Chart. ffmpeg mit -crf 23 und -movflags +faststart. Weist auf mögliche Blank-Frames bei localhost hin und gibt waitForNetworkIdle als Tipp.",
+      "files": []
+    }
+  ]
+}

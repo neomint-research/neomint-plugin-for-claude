@@ -5,12 +5,6 @@ argument-hint: "[folder path, optional]"
 
 # /rename-pdf
 
-**Output language:** respond in the language the user wrote in. German
-in → German out, English in → English out. If the user has set an
-explicit language preference earlier in the conversation, respect that
-instead. This rule applies from your first response, before any skill
-file is read. (Full rule: `skills/_shared/language.md`.)
-
 The user has invoked the PDF-rename skill explicitly. Run it exactly as specified in
 the `rename-pdf` skill — the skill carries the full contract (filename convention,
 parallel batch reading, edge-case handling, sender and subject short-name rules, and

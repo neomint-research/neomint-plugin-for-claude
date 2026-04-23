@@ -10,34 +10,146 @@ Format: `major.minor.fix`
 
 ---
 
-## 0.6.7 — 2026-04-22
+## 0.6.15 — 2026-04-23
 
-Single-issue fix surfaced after 0.6.6 shipped: the slash-commands
-were not enforcing the output-language rule on their first response.
+Layer 2 grader housekeeping — all five graders now fully wired.
 
-- **Inline output-language directive in every command file.** Each of
-  `commands/council.md`, `commands/rename-pdf.md`, and
-  `commands/update-plugin.md` previously said "Apply
-  `skills/_shared/language.md`" as step 2 of the body. That works for
-  every assistant message *after* the skill has been read — but the
-  command's own first response (the Council's T1, the rename-pdf
-  greeting, the update-plugin Step 0 announcement) is generated
-  before the body is acted on, so the language rule had no chance to
-  fire and the model defaulted to English even when the user had
-  written in German. The fix is a five-line **Output language**
-  block at the top of each command file, immediately after the
-  `# /<name>` heading: a one-paragraph summary of the rule (German
-  in → German out, English in → English out, explicit user override
-  wins) plus a pointer to `skills/_shared/language.md` for the full
-  text. The rule now applies from token one of the first reply,
-  before any further file is read. The wording is contextually
-  tailored per command — `council.md` references "the very first
-  sentence of T1" because T1 is the council's named opening turn,
-  while `rename-pdf.md` and `update-plugin.md` say "from your first
-  response" because they have no turn vocabulary. The substance is
-  the same across all three; only the timing reference adapts to
-  the skill's own conventions. The body still references the shared
-  file so the canonical rule has a single source of truth.
+- **`skills/session-docs/scripts/grade.py`** — added `--count-only` flag
+  (was missing; grader reported "grader did not return integer" in verbose
+  Layer 2 output, making the 21 assertions invisible to the floor system).
+- **`scripts/plugin-check.py`** — added `session-docs: 21` to
+  `LAYER2_GRADER_FLOORS`; all five skills now have pinned assertion floors.
+  Total Layer 2 assertions: 106 (council 48, rename-pdf 16, session-docs 21,
+  update-plugin 14, video-preview 7).
+
+---
+
+## 0.6.14 — 2026-04-23
+
+Housekeeping pass — Layer 3 audit findings resolved, KI-003 closed.
+
+- **`skills/video-preview/scripts/grade.py` added** — Layer 2 grader for
+  video-preview (6 assertions: Language/Environment headings, 1080×1920
+  viewport standard, `-movflags +faststart` Signal flag, `yyyy-mm-dd`
+  output naming, web fallback section, puppeteer-patterns reference bundled).
+  Closes KI-003.
+- **`skills/_shared/environments.md`** — removed hardcoded `/mnt/outputs`
+  path; Cowork section now reads "write outputs to the selected folder"
+  (WORDING fix from Layer 3 F8).
+- **`README.md`** — added "Required blocks in every `commands/*.md`" section
+  documenting the frontmatter requirement that Layer 1 already enforces
+  (STRUCTURE gap from Layer 3 F4).
+
+---
+
+## 0.6.13 — 2026-04-23
+
+Layer 3 audit fixes + two new Layer 1 assertions. First full three-layer
+pass post-0.6.11. No functional changes to any skill's runtime behaviour.
+
+Layer 3 structural findings corrected:
+
+- `commands/session-docs.md` — added YAML frontmatter (`description`, `argument-hint`),
+  rewrote body in English (was the only German command file); clarified mode-dispatch
+  (start / update / handover)
+- `skills/rename-pdf/SKILL.md` — added missing `user-invocable: true` frontmatter flag
+  (Pattern 3 skill paired with `/rename-pdf` — omission makes slash command unreachable)
+- `README.md` — added pattern-clarification note ("four skills have slash commands;
+  `video-preview` is Pattern 1, auto-trigger only")
+
+Self-optimisation — two new Layer 1 assertions in `plugin-check.py`:
+
+- **commands frontmatter required** — every `commands/<name>.md` must open with a `---`
+  YAML block containing at least a `description` field (catches `session-docs`
+  regression class automatically)
+- **paired skills require `user-invocable: true`** — any skill with a paired command file
+  (Pattern 2 or 3) must carry `user-invocable: true` (catches `rename-pdf` regression
+  class automatically; extends existing `disable-model-invocation → user-invocable` check)
+
+---
+
+## 0.6.12 — 2026-04-23
+
+Self-optimisation pass from the 0.6.11 Layer 3 audit. Two proposals
+implemented; no skill content changes, no user-visible behaviour changes.
+
+- **Layer 1: `## Language` and `## Environment detection` must be
+  dedicated section headings.** The previous checks verified that
+  `_shared/language.md` and `_shared/environments.md` were referenced
+  somewhere in the SKILL.md text, but a bare inline `Read ...` line
+  satisfies that while making the sections invisible to tooling and
+  reviewers scanning for heading anchors. Two new Layer 1 assertions
+  require the canonical `## Language` and `## Environment detection`
+  headings to exist as proper `##` sections. All five existing skills
+  already comply.
+- **`references/plugin-eval.md`: heading requirement documented.**
+- **KNOWN_ISSUES KI-003: video-preview grader absent.** Planned follow-up:
+  `skills/video-preview/scripts/grade.py`. Not a blocker.
+
+---
+
+## 0.6.11 — 2026-04-23
+
+New skill: **`video-preview`** — turns a website, web app, dashboard, or static
+HTML/CSS page into a compressed MP4 preview video using Puppeteer (headless
+Chromium) and ffmpeg. Default output: 1080×1920 (9:16 portrait), H.264, optimised
+for Signal/WhatsApp. Three interaction patterns: scroll-through, click-demo (click
+sequence with selectors), highlight-zoom. Output naming follows `yyyy-mm-dd_
+description_preview.mp4`. Skill-creator iteration 1 ran with 3 evals × 2 configs
+(with-skill vs. without-skill): 15/15 assertions pass with skill (100%), 8/15
+without (53%). Main differentiators: viewport enforcement (1080×1920), frame-rate
+calibration (10 fps / ~200 frames for 20 s), `-movflags +faststart` for instant
+Signal playback, output naming convention. Pattern 1 (Auto-only).
+
+- Added `skills/video-preview/SKILL.md`
+- Added `skills/video-preview/references/puppeteer-patterns.md`
+
+---
+
+## 0.6.10 — 2026-04-23
+
+Fix: `/session-docs` command now handles missing files correctly for new
+projects. Path detection uses `ls` on the workspace folder; missing
+KNOWN_ISSUES.md or HANDOVER.md are created immediately from templates with
+project name derived from folder name. No prompting.
+
+- Updated `commands/session-docs.md` — precise path detection + file creation logic
+
+---
+
+## 0.6.9 — 2026-04-23
+
+Version bump only — no functional changes. Resolves installation conflict
+with 0.6.8 in Cowork (existing plugin could not be updated in-place).
+
+---
+
+## 0.6.8 — 2026-04-23
+
+Added `/session-docs` command (Pattern 3 — Auto + Command). Guarantees a
+full READ MODE run at the start of any new chat via `/session-docs`, regardless
+of the opening message. Auto-trigger remains active for mid-session use.
+Updated SKILL.md frontmatter with `user-invocable: true` and revised
+invocation model section.
+
+- Added `commands/session-docs.md`
+- Updated `skills/session-docs/SKILL.md` — Pattern 3, user-invocable
+
+---
+
+## 0.6.7 — 2026-04-23
+
+New skill: **`session-docs`** — keeps project documentation in sync during
+work sessions. Auto-triggers at session start (reads MEMORY.md, KNOWN_ISSUES.md,
+HANDOVER.md in order), after every CI log or tool result (writes KNOWN_ISSUES
+immediately), after user corrections (writes Memory), and at task boundaries
+(updates task list). Also runs on explicit "session abschliessen" / "übergabe
+vorbereiten". Creates missing files from templates — no prompting needed.
+Includes security rule: never repeat credential values from project files.
+
+- Added `skills/session-docs/SKILL.md`
+- Added `skills/session-docs/references/templates.md` — file templates for
+  KNOWN_ISSUES.md, HANDOVER.md, and all memory file types
 
 ---
 

@@ -42,6 +42,15 @@ must all pass before proceeding:
   `description`, and the file is not mid-sentence truncated.
 - Every skill references `_shared/language.md` and
   `_shared/environments.md`.
+- Every skill's SKILL.md has `## Language` and `## Environment detection`
+  as dedicated section headings (not just inline prose). Rationale: a bare
+  `Read ../_shared/language.md` line in the body satisfies the reference
+  check but is invisible to progressive-disclosure tooling and human
+  reviewers who scan for section headings. The heading is the structural
+  contract; the reference inside it is the runtime instruction. Requiring
+  both is the conservative choice that prevents the two from drifting apart.
+  Promoted to a Layer 1 assertion in 0.6.11 after a Layer 3 audit found
+  a new skill satisfying the reference check but missing the heading.
 - Every file referenced as `references/X.md` inside a SKILL.md actually
   exists on disk.
 - README mentions every skill present on disk.

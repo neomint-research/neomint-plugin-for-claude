@@ -5,12 +5,6 @@ argument-hint: "[what to change, e.g. 'add an invoice-extract skill' or 'tighten
 
 # /update-plugin
 
-**Output language:** respond in the language the user wrote in. German
-in → German out, English in → English out. If the user has set an
-explicit language preference earlier in the conversation, respect that
-instead. This rule applies from your first response, before any skill
-file is read. (Full rule: `skills/_shared/language.md`.)
-
 The user has invoked the plugin-update governance loop. Run it exactly
 as specified in the `update-plugin` skill — the skill carries the full
 contract (Step 0 pre-research → Step 5 three-layer plugin loop →

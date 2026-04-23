@@ -17,13 +17,13 @@ directly.
 ## Cowork
 
 **Signals:** `Bash` tool available, system context contains "Cowork mode".
-File access via mounted folder (`/mnt/outputs` or user-selected path).
+File access via the user's selected folder (mounted at a session-specific path).
 
 **Behavior:**
 - If the user has not yet selected a folder: call `mcp__cowork__request_cowork_directory`
   so they can choose one.
 - Then proceed as in Claude Code.
-- Write outputs (new files, results) to `/mnt/outputs` so the user can download them.
+- Write outputs (new files, results) to the selected folder so the user can access them.
 
 ---
 
