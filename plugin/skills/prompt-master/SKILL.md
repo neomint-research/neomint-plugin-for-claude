@@ -77,7 +77,7 @@ build prompts. One at a time. Ready to paste.
 
 1. A single copy-ready prompt block, ready to paste into the target tool.
 2. One line of metadata under it:
-   `🎯 Target: <tool name>` and `💡 <one sentence — what was optimised and why>`
+   `Target: <tool name>` and `Note: <one sentence — what was optimised and why>`
 3. If the prompt requires setup outside the prompt itself (for example, system
    prompt vs. user prompt placement, or a model parameter), add at most two
    plain-English lines below. Only when genuinely needed.

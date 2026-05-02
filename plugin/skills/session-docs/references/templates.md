@@ -54,7 +54,7 @@ known from context, and mark unknowns with `<!-- TODO: fill in -->`.
 
 ---
 
-## ⚠️ PFLICHTREGELN FÜR CLAUDE
+## PFLICHTREGELN FÜR CLAUDE
 
 **REGEL 1 — KNOWN_ISSUES.md ist immer aktuell zu halten:**
 Nach jeder neuen Erkenntnis: ZUERST KNOWN_ISSUES.md aktualisieren, DANN weitere Aktionen.

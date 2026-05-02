@@ -40,7 +40,7 @@ selection, the token-efficiency audit, and the Web fallback).
   critical uncertainty, ship with the assumption named and offer a
   follow-up version. Never loop.
 - **Single copyable block.** The output is one prompt block plus the
-  metadata line (`🎯 Target: ...` and `💡 ...`). No five-variant menus,
+  metadata line (`Target: ...` and `Note: ...`). No five-variant menus,
   no "let me know if you want changes", no recap of what was done.
 - **The architecture is silent.** The user never sees "I used Pattern A"
   or "I selected the role-constraints-format-task scaffold". The label is

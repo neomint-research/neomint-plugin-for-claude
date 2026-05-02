@@ -147,7 +147,7 @@ adaptation.
 3. Produce the repaired prompt in the same shape the user implied. Do not
    switch architectures unless the original architecture was the defect.
 4. The metadata line names the defect that was fixed
-   (e.g. `💡 Removed three redundant clauses and added the missing acceptance
+   (e.g. `Note: Removed three redundant clauses and added the missing acceptance
    criterion.`).
 
 The repaired prompt is the deliverable — not a critique of the original.

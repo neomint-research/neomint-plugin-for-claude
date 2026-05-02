@@ -10,6 +10,23 @@ Format: `major.minor.fix`
 
 ---
 
+## 0.6.17 — 2026-05-02
+
+Fix: strip emojis from `prompt-master` and `session-docs` skills. The
+`prompt-master` output contract (`Target:` / `Note:` metadata line),
+grader, command, references, evals, README, and this CHANGELOG entry
+all violated the global no-emoji rule. `session-docs` had emoji in
+`references/templates.md` and `SKILL.md`. Grader updated to assert the
+plain-text labels; assertion count unchanged at 27.
+
+Cleanup: remove `evals/AUDIT-LAYER3-LITE.md` from the `prompt-master`
+skill folder (session log, not skill content).
+
+CI: `prompt-master` added to the per-skill Layer 2 matrix in
+`.github/workflows/plugin-check.yml`.
+
+---
+
 ## 0.6.16 — 2026-05-02
 
 New skill `prompt-master` added (Pattern 3 — auto-trigger plus
@@ -23,7 +40,7 @@ Udio), and automation steps (Zapier, Make, n8n).
 - **`skills/prompt-master/SKILL.md`** — identity and hard rules,
   nine-dimension intent extraction, silent architecture selection,
   three-question ceiling, token-efficiency audit, single-block output
-  contract with `🎯 Target:` / `💡 ...` metadata line.
+  contract with `Target:` / `Note: ...` metadata line.
 - **`skills/prompt-master/references/tools.md`** — target tool families
   with what works and what fails for each. Loaded on demand.
 - **`skills/prompt-master/references/patterns.md`** — six prompt

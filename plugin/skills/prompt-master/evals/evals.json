@@ -5,7 +5,7 @@
       "id": 0,
       "name": "english-auto-trigger-coding",
       "prompt": "write me a prompt for Cursor to refactor my auth module from session cookies to JWT",
-      "expected_output": "Skill fires without explicit invocation. Detects target = Cursor (coding agent). The user already provided enough intent (target tool, task, context); no clarifying questions needed. Picks Pattern B (context + scope + acceptance + format). Output is one copyable prompt block plus '🎯 Target: Cursor' and a one-line strategy note. Architecture is never named in the output."
+      "expected_output": "Skill fires without explicit invocation. Detects target = Cursor (coding agent). The user already provided enough intent (target tool, task, context); no clarifying questions needed. Picks Pattern B (context + scope + acceptance + format). Output is one copyable prompt block plus 'Target: Cursor' and a one-line strategy note. Architecture is never named in the output."
     },
     {
       "id": 1,
@@ -23,7 +23,7 @@
       "id": 3,
       "name": "fix-existing-prompt",
       "prompt": "Here's a bad prompt I wrote, fix it: 'Hey, please if you could maybe like create a function that, you know, takes user input and validates it, that would be really helpful, thanks so much!'",
-      "expected_output": "Skill fires. Pattern E (fix-existing-prompt). Strips hedges, restating, and meta-statements ('Hey', 'please if you could maybe like', 'you know', 'really helpful, thanks so much'). Adds the missing acceptance criterion (what counts as valid input) and output contract. Returns the repaired prompt in the same shape (function-creation request) with explicit constraints. Metadata line names the defect: '💡 Removed seven redundant clauses and added the missing validation contract.'"
+      "expected_output": "Skill fires. Pattern E (fix-existing-prompt). Strips hedges, restating, and meta-statements ('Hey', 'please if you could maybe like', 'you know', 'really helpful, thanks so much'). Adds the missing acceptance criterion (what counts as valid input) and output contract. Returns the repaired prompt in the same shape (function-creation request) with explicit constraints. Metadata line names the defect: 'Note: Removed seven redundant clauses and added the missing validation contract.'"
     },
     {
       "id": 4,
@@ -77,7 +77,7 @@
       "id": 12,
       "name": "adapt-existing-prompt",
       "prompt": "I have this prompt that works great for GPT-4o, can you adapt it for Claude? [pastes a 200-word GPT-4o prompt with role + constraints + examples]",
-      "expected_output": "Skill fires. Pattern E (fix/adapt existing). Reads the source prompt for intent. Adapts to Claude's strengths (XML tags work better than markdown headings; explicit grounding anchor for closed-book tasks; concise role assignment). Returns the adapted prompt as a single block. Metadata: '🎯 Target: Claude' and '💡 Replaced markdown structure with XML tags and tightened the role line.'"
+      "expected_output": "Skill fires. Pattern E (fix/adapt existing). Reads the source prompt for intent. Adapts to Claude's strengths (XML tags work better than markdown headings; explicit grounding anchor for closed-book tasks; concise role assignment). Returns the adapted prompt as a single block. Metadata: 'Target: Claude' and 'Note: Replaced markdown structure with XML tags and tightened the role line.'"
     },
     {
       "id": 13,

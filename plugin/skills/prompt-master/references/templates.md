@@ -189,7 +189,7 @@ orientation"}.
 ```
 
 For voice-cloning targets, add the source-voice anchor in the metadata line
-(`🎯 Target: ElevenLabs · Voice: <name>`) rather than in the prompt itself.
+(`Target: ElevenLabs · Voice: <name>`) rather than in the prompt itself.
 
 ---
 

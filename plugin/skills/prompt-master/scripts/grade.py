@@ -131,11 +131,11 @@ def main() -> int:
 
     # 7. Output format contract — single copy-ready block + metadata line
     checks += 1
-    if "🎯 Target" not in text and "Target:" not in text:
-        failures.append("Output metadata line ('🎯 Target:') missing")
+    if "Target:" not in text:
+        failures.append("Output metadata 'Target:' line missing")
     checks += 1
-    if "💡" not in text and "one sentence" not in text.lower():
-        failures.append("Output strategy-note line missing")
+    if "Note:" not in text and "one sentence" not in text.lower():
+        failures.append("Output strategy-note 'Note:' line missing")
 
     # 8. Nine dimensions of intent — the extraction step is the reason
     #    the skill produces sharper prompts than ad-hoc rewrites

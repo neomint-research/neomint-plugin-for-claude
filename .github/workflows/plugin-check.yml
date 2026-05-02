@@ -54,7 +54,7 @@ jobs:
         # Adding a new per-skill grader: append the skill name here.
         # The job is conditional on the grader script existing, so an
         # entry without a grader is a no-op rather than a failure.
-        skill: [council, rename-pdf, update-plugin]
+        skill: [council, rename-pdf, update-plugin, prompt-master]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

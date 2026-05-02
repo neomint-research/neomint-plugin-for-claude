@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.6.16` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.6.17` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -68,7 +68,7 @@ n8n). Runs a silent pipeline: detect target tool → extract intent across nine
 dimensions → ask up to three targeted questions if critical slots are empty
 → select one prompt architecture (never named in output) → apply only safe
 techniques → audit every word for load-bearing → deliver one block plus a
-`🎯 Target: ...` / `💡 ...` metadata line. Hard rules: never embed
+`Target: ...` / `Note: ...` metadata line. Hard rules: never embed
 fabrication-prone techniques inside a single prompt (Mixture-of-Experts,
 Tree-of-Thought, Graph-of-Thought, Universal Self-Consistency); never add
 Chain-of-Thought scaffolding to reasoning-native models — they think
