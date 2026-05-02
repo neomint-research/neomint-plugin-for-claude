@@ -1,3 +1,7 @@
+> **Dieses Repository ist archiviert.**
+> Die kanonische Quelle ist [git.neomint.com/nm/neomint-plugin-for-claude](https://git.neomint.com/nm/neomint-plugin-for-claude).
+> Issues, PRs und Releases werden dort gepflegt. Dieses GitHub-Repo bleibt als Read-only-Spiegel erhalten.
+
 # NeoMINT Plugin for Claude
 
 This repository is the public record of how [NeoMINT GmbH](https://neomint.com) builds and maintains a Claude plugin in production. It contains two things that share a commit history on purpose:
