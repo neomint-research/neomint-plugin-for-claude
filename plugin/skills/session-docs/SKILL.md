@@ -200,7 +200,7 @@ When the user says "session abschliessen", "übergabe vorbereiten",
    - [ ] Open tasks clearly described for the next session?
 
 After the checklist: confirm to the user what was updated.
-Short, no explanations: "KNOWN_ISSUES ✅ (KI-008 updated), HANDOVER ✅, Memory ✅ (1 new entry), Tasks ✅"
+Short, no explanations: "KNOWN_ISSUES done (KI-008 updated), HANDOVER done, Memory done (1 new entry), Tasks done"
 
 ---
 
