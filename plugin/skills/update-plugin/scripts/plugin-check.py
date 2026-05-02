@@ -956,6 +956,7 @@ LAYER2_GRADER_FLOORS: dict[str, int] = {
     "session-docs": 21,
     "update-plugin": 14,
     "video-preview": 6,
+    "prompt-master": 27,
 }
 
 

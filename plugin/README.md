@@ -2,7 +2,7 @@
 
 A Claude plugin from [NeoMINT GmbH](https://neomint.com) — a growing set of skills for recurring workflows, built to the same quality bar we apply to our own production work. Compatible with Claude Code, Cowork, and Claude AI (Web).
 
-**Current version:** `0.6.15` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
+**Current version:** `0.6.16` — see [`CHANGELOG.md`](CHANGELOG.md) for history.
 **License:** [Apache License 2.0](LICENSE).
 
 ---
@@ -18,7 +18,7 @@ Download the latest `neomint-toolkit.plugin` file from the project's [GitHub Rel
 
 ## What's inside
 
-Five skills, each opt-in, each scoped to one job. Four are paired with a `/skill-name` slash command (Pattern 2 or 3); `video-preview` is Pattern 1 (auto-trigger only, no command).
+Six skills, each opt-in, each scoped to one job. Five are paired with a `/skill-name` slash command (Pattern 2 or 3); `video-preview` is Pattern 1 (auto-trigger only, no command).
 
 ### `council`
 
@@ -56,6 +56,26 @@ Puppeteer or ffmpeg and gives install instructions; in Claude AI (Web), delivers
 a ready-to-run `record.js`, `stitch.sh`, and `README.md` instead of executing
 directly. Triggers on phrases like "make a preview video", "record the page",
 "zeig das als Clip", or "ich will das schnell teilen können".
+
+### `prompt-master`
+
+Generates a single copy-ready prompt for any other AI tool — chat models,
+reasoning-native models (o-series, R1, extended thinking), coding agents
+(Claude Code, Cursor, Windsurf, Copilot, Devin, Bolt, v0, Lovable), image
+generators (Midjourney, DALL-E, Stable Diffusion, Flux), video and audio
+models (Sora, Runway, ElevenLabs, Suno), and automation steps (Zapier, Make,
+n8n). Runs a silent pipeline: detect target tool → extract intent across nine
+dimensions → ask up to three targeted questions if critical slots are empty
+→ select one prompt architecture (never named in output) → apply only safe
+techniques → audit every word for load-bearing → deliver one block plus a
+`🎯 Target: ...` / `💡 ...` metadata line. Hard rules: never embed
+fabrication-prone techniques inside a single prompt (Mixture-of-Experts,
+Tree-of-Thought, Graph-of-Thought, Universal Self-Consistency); never add
+Chain-of-Thought scaffolding to reasoning-native models — they think
+internally, CoT degrades output. Auto-trigger plus explicit `/prompt-master
+[target tool and goal]`. Adapted from the open-source `prompt-master` skill
+by Nidhin Joseph Nelson (MIT-licensed) and rewritten end-to-end to fit the
+plugin standard.
 
 ### `update-plugin`
 
