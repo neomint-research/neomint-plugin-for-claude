@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "neomint",
+  "description": "NeoMINT Toolkit — skills for recurring workflows by NeoMINT GmbH",
+  "owner": {
+    "name": "NeoMINT GmbH",
+    "url": "https://neomint.com"
+  },
+  "plugins": [
+    {
+      "name": "neomint-toolkit",
+      "description": "A growing set of skills for recurring workflows: council judgment, prompt-master, rename-pdf, session-docs, video-preview, update-plugin. Compatible with Claude Code, Cowork, and Claude AI (Web).",
+      "source": "./plugin",
+      "category": "productivity",
+      "homepage": "https://github.com/neomint-research/neomint-plugin-for-claude"
+    }
+  ]
+}
